@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="layout" content="main">
+    <g:set var="entityName" value="${message(code: 'example.label', default: 'example')}" />
+    <title><g:message code="default.admin.menu.label" args="[entityName]" default="Welcome to ${entityName}" /></title>
+</head>
+<body>
+<g:render template="/examples/nav"/>
+<g:if test="${flash.message}">
+    <div class="message" role="status">${flash.message}</div>
+</g:if>
+<div class="container">
+    <div class="content">
+        <g:render template="/examples/navExamples"/>
+    </div>
+</div>
+
+</body>
+</html>
