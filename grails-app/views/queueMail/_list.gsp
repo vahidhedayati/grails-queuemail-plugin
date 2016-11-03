@@ -81,15 +81,11 @@
 					</g:unless>
 					<td><g:message code="queuemail.reportType.${reportInstance.status}"/></td>
 					<td class="dropdown queuekit">
-					<g:if test="${reportInstance.status== QueueStatus.COMPLETED}">
-						<g:link action="download" class="btn btn-default" id="${reportInstance.id}"><g:message code="queuemail.reportType.${reportInstance.status}"/></g:link>
-					</g:if>
-					
-					<g:else>
+
 					<i  class="btn btn-default" id="${reportInstance.id}">
 					<g:message code="queuemail.reportType.${reportInstance.status}"/>
 					</i>
-					</g:else>					
+
 					<a  class="btn btn-default actionButton" data-toggle="dropdown"
 					  data-row-id="${reportInstance.id}" data-queueType="${reportInstance.queueType}" data-row-status="${reportInstance.status}">
 					   <span class="arrow-down"></span>						  

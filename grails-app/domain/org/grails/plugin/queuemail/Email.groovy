@@ -1,18 +1,17 @@
 package org.grails.plugin.queuemail
 
-import static org.grails.plugin.queuemail.enums.MessageStatus.*
-import grails.gsp.PageRenderer
-import grails.plugin.mail.GrailsMailException
-import grails.plugin.mail.MailMessageContentRenderer
+import grails.plugins.mail.GrailsMailException
+import grails.plugins.mail.MailMessageContentRenderer
 import grails.util.Holders
-
-import javax.activation.FileTypeMap
-
 import org.apache.commons.lang.StringUtils
-import org.codehaus.groovy.grails.io.support.FileSystemResource
+import org.grails.io.support.FileSystemResource
 import org.grails.plugin.queuemail.enums.MessageStatus
 import org.springframework.core.io.InputStreamSource
 import org.springframework.util.Assert
+
+import javax.activation.FileTypeMap
+
+import static org.grails.plugin.queuemail.enums.MessageStatus.CREATED
 
 
 /**

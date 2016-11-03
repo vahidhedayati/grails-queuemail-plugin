@@ -1,34 +1,29 @@
 package org.grails.plugin.queuemail
 
+import grails.core.GrailsApplication
+import grails.core.support.GrailsApplicationAware
 import org.springframework.web.servlet.support.RequestContextUtils
 
-class QueueTestController  {
-	
+class QueueTestController implements GrailsApplicationAware {
+
 	static defaultAction = 'index'
-	
+	def config
+	GrailsApplication grailsApplication
+
 	def queueMailApiService
 	def queueMailUserService
-	
-	
+
+
 	private String VIEW = '/examples/index'
 	private String EXAMPLE_SERVICE='queueMailExample'
 	private String FAILURE = "please configure config keys exampleFrom exampleTo"
-	
-	def beforeInterceptor = {
-		[action:this.&checkEnabled()]
-	}
-	
-	def checkEnabled() {
-		if (config.disableExamples) {
-			redirect(action: 'notFound')
-			return
-		}
-	}
+
+
 	def notFound() {
-		render status:response.SC_NOT_FOUND
+		render status: response.SC_NOT_FOUND
 		return
 	}
-	
+
 	def index() {
 		render view: VIEW
 	}
@@ -172,7 +167,7 @@ class QueueTestController  {
 		render FAILURE
 	}
 
-	ConfigObject getConfig() {
-		return grailsApplication.config?.queuemail ?: ''
+	void setGrailsApplication(GrailsApplication ga) {
+		config = ga.config.queuemail
 	}
 }

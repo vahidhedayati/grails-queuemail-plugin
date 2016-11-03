@@ -1,25 +1,26 @@
 package org.grails.plugin.queuemail
 
-import static org.grails.plugin.queuemail.enums.QueueStatus.*
-import grails.gsp.PageRenderer
+import grails.core.GrailsApplication
+import grails.core.support.GrailsApplicationAware
 import grails.util.Holders
-import java.util.concurrent.RunnableFuture
-import java.util.concurrent.ScheduledThreadPoolExecutor
-import org.codehaus.groovy.grails.plugins.web.taglib.ApplicationTagLib
 import org.grails.plugin.queuemail.enums.Priority
 import org.grails.plugin.queuemail.enums.QueueStatus
+import org.grails.plugins.web.taglib.ApplicationTagLib
 
-abstract class QueueMailBaseService  {
+import java.util.concurrent.RunnableFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
 
-	def grailsApplication = Holders.grailsApplication
-	def g = grailsApplication.mainContext.getBean(ApplicationTagLib)
-	def queueMailService = grailsApplication.mainContext.getBean('queueMailService')
-	def queueMailUserService= grailsApplication.mainContext.getBean('queueMailUserService')
-	def basicExecutor = grailsApplication.mainContext.getBean('basicExecutor')
-	//private BasicExecutor basicExecutor
-	
-	
-	PageRenderer groovyPageRenderer
+import static org.grails.plugin.queuemail.enums.QueueStatus.*
+
+abstract class QueueMailBaseService  implements GrailsApplicationAware {
+
+	def config
+	GrailsApplication grailsApplication
+
+
+	def g = Holders.grailsApplication.mainContext.getBean(ApplicationTagLib)
+	def queueMailService = Holders.grailsApplication.mainContext.getBean('queueMailService')
+	def basicExecutor = Holders.grailsApplication.mainContext.getBean('basicExecutor')
 
 	abstract def configureMail(executor, EmailQueue queue)
 
@@ -29,8 +30,8 @@ abstract class QueueMailBaseService  {
 		try {
 			if (jobConfigurations) {
 				String sendAccount = executor.getSenderCount(jobConfigurations)
-				if (sendAccount) {			
-					queueMailService.send(sendAccount,queue)
+				if (sendAccount) {
+					queueMailService.sendEmail(sendAccount,queue)
 					failed=false							
 				} else {
 					error = 'daily limit reached. Review: '+jobConfigurations
@@ -48,7 +49,8 @@ abstract class QueueMailBaseService  {
 		}
 	}
 
-	def executeReport(EmailQueue queue) {
+
+	def executeReport(queue) {
 		boolean validStatus=verifyStatusBeforeStart(queue.id)
 		if (validStatus && !threadInterrupted) {
 			boolean hasException=false
@@ -143,7 +145,7 @@ abstract class QueueMailBaseService  {
 		}
 	}
 
-	ConfigObject getConfig() {
-		return grailsApplication.config.queuemail ?: ''
+	void setGrailsApplication(GrailsApplication ga) {
+		config = ga.config.queuemail
 	}
 }

@@ -5,8 +5,7 @@
 		<meta name="layout" content="main" />
 		<g:set var="entityName" value="${message(code: 'queuemail.reportDownload.label')}" scope="request" />
 		<title><g:message code="queuemail.list.label" args="[entityName]" /></title>
-		<asset:javascript src="bootstrap.js" />
-		<asset:stylesheet href="bootstrap.css" />
+
 		<style type="text/css">
 		html,body {
 			max-width: 100% !important;

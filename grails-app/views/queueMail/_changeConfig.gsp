@@ -64,10 +64,6 @@
 <g:message code="queuemail.checkQueue2.message"/>
 <g:message code="queuemail.checkQueue3.message"/>
 <g:message code="queuemail.checkQueue4.message"/>
-<g:message code="queuemail.checkQueue5.message"/>
-<g:message code="queuemail.checkQueue6.message"/><br/>
-<g:message code="queuemail.checkQueue7.message"/>
-<g:message code="queuemail.checkQueue8.message"/>
 </g:if>
 
 <g:if test="${instance.changeType=='STOPEXECUTOR'}">

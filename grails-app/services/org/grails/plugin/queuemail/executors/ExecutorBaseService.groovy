@@ -1,19 +1,23 @@
 package org.grails.plugin.queuemail.executors
 
-import static org.grails.plugin.queuemail.enums.QueueStatus.*
-import static org.grails.plugin.queuemail.enums.QueueTypes.*
-
+import grails.core.GrailsApplication
+import grails.core.support.GrailsApplicationAware
 import org.grails.plugin.queuemail.EmailQueue
-import org.grails.plugin.queuemail.events.BasicQueuedEvent
-import org.grails.plugin.queuemail.events.EmailQueuedEvent
+
+import static org.grails.plugin.queuemail.enums.QueueStatus.QUEUED
+import static org.grails.plugin.queuemail.enums.QueueStatus.RUNNING
+import static org.grails.plugin.queuemail.enums.QueueTypes.BASIC
+import static org.grails.plugin.queuemail.enums.QueueTypes.ENHANCED
+
 /**
 
  * @author Vahid Hedayati
  *
  */
-class ExecutorBaseService {
+class ExecutorBaseService  implements GrailsApplicationAware {
 
-	def grailsApplication
+	def config
+	GrailsApplication grailsApplication
 
 	void checkQueue(Long id=null) {
 		def inputParams=[:]
@@ -56,10 +60,10 @@ class ExecutorBaseService {
 				sleep(500)
 				switch (queue.queueType) {
 					case "${ENHANCED}":
-						publishEvent(new EmailQueuedEvent(queue.id))
+						notify( "method.emailExecutor",queue.id)
 						break
 					case "${BASIC}":
-						publishEvent(new BasicQueuedEvent(queue.id))
+						notify( "method.basicExecutor",queue.id)
 						break
 				}
 			} as Runnable ).start()
@@ -85,7 +89,7 @@ class ExecutorBaseService {
 		}
 	}
 
-	ConfigObject getConfig() {
-		return grailsApplication.config?.queuemail ?: ''
+	void setGrailsApplication(GrailsApplication ga) {
+		config = ga.config.queuemail
 	}
 }

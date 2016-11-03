@@ -1,23 +1,23 @@
-
-
 package org.grails.plugin.queuemail
 
-import static org.grails.plugin.queuemail.enums.ConfigTypes.*
-import static org.grails.plugin.queuemail.enums.QueueStatus.*
-import static org.grails.plugin.queuemail.enums.QueueTypes.*
-import static org.grails.plugin.queuemail.enums.SearchTypes.*
+import grails.core.GrailsApplication
+import grails.core.support.GrailsApplicationAware
 import groovy.time.TimeCategory
 import groovy.time.TimeDuration
-
-import java.util.concurrent.RunnableFuture
-
 import org.grails.plugin.queuemail.enums.Priority
-import org.grails.plugin.queuemail.events.BasicQueuedEvent
-import org.grails.plugin.queuemail.events.EmailQueuedEvent
 import org.grails.plugin.queuemail.helpers.QueueHelper
 import org.grails.plugin.queuemail.validation.EmailQueueBean
 import org.grails.plugin.queuemail.validation.QueueMailBean
 import org.grails.plugin.queuemail.validation.QueueMailLists
+
+import java.util.concurrent.RunnableFuture
+
+import static org.grails.plugin.queuemail.enums.ConfigTypes.*
+import static org.grails.plugin.queuemail.enums.QueueStatus.*
+import static org.grails.plugin.queuemail.enums.QueueTypes.BASIC
+import static org.grails.plugin.queuemail.enums.QueueTypes.ENHANCED
+import static org.grails.plugin.queuemail.enums.SearchTypes.FROM
+import static org.grails.plugin.queuemail.enums.SearchTypes.USER
 
 /**
  * QueueReportService is the main service that interacts with 
@@ -28,9 +28,10 @@ import org.grails.plugin.queuemail.validation.QueueMailLists
  * buildReport  -> Two ways of being called  
  *
  */
-class QueueMailApiService {
+class QueueMailApiService implements GrailsApplicationAware {
 
-	def grailsApplication
+	def config
+	GrailsApplication grailsApplication
 	def exeutorBaseService
 
 	def emailExecutor
@@ -646,10 +647,10 @@ class QueueMailApiService {
 			sleep(500)
 			switch (queue?.queueLabel) {
 				case "${BASIC}":
-					publishEvent(new BasicQueuedEvent(queue.id))
+					notify( "method.basicExecutor",queue.id)
 					break
 				case "${ENHANCED}":
-					publishEvent(new EmailQueuedEvent(queue.id))
+					notify( "method.emailExecutor",queue.id)
 					break
 			}
 		} as Runnable ).start()
@@ -660,7 +661,7 @@ class QueueMailApiService {
 		return (where ? where + ' and ' : 'where ') + clause
 	}
 
-	ConfigObject getConfig() {
-		return grailsApplication.config.queuemail ?: ''
+	void setGrailsApplication(GrailsApplication ga) {
+		config = ga.config.queuemail
 	}
 }

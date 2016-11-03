@@ -1,9 +1,7 @@
 import org.grails.plugin.queuemail.enums.QueueTypes
 
 queuemail {
-	exampleFrom="usera <usera@gmail.com>"
-	exampleTo="usera <usera@gmail.com>"
-
+	
 	//standardRunnable = true
 	emailPriorities = [
 					defaultExample:org.grails.plugin.queuemail.enums.Priority.REALLYSLOW
@@ -25,7 +23,6 @@ queuemail {
 			"mail.smtp.socketFactory.class":"javax.net.ssl.SSLSocketFactory",
 			"mail.smtp.socketFactory.fallback":"false"]
 	}
-	mailConfigExample1.fromAddress="USERA@gmail.com"
 	
 	// In our example we only have 2 examples both set to 2 emails.
 	// After 4 emails all jobs bound to defaultExampleMailingService will not be
@@ -45,7 +42,6 @@ queuemail {
 			"mail.smtp.socketFactory.class":"javax.net.ssl.SSLSocketFactory",
 			"mail.smtp.socketFactory.fallback":"false"]
 	}
-	mailConfigExample2.fromAddress="USERB@gmail.com"
 	
 	/*
 	 * keepAliveTime in seconds

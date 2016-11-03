@@ -1,11 +1,8 @@
 package org.grails.plugin.queuemail
 
 import grails.util.Holders
-
-import java.text.SimpleDateFormat
-
-import org.codehaus.groovy.grails.plugins.web.taglib.ApplicationTagLib
 import org.grails.plugin.queuemail.enums.Priority
+import org.grails.plugins.web.taglib.ApplicationTagLib
 
 /**
  * ! - IMPORTANT NOTICE - !
