@@ -19,7 +19,7 @@ Whilst making this plugin the issue of TOC violation came up. Please check with 
 
 ### Grails 3:
 ```groovy
-compile "org.grails.plugins:queuemail:1.1"
+compile "org.grails.plugins:queuemail:1.2"
 ```
 
 ##### [source](https://github.com/vahidhedayati/grails-queuemail-plugin/) 
