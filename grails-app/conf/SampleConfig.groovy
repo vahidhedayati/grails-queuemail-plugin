@@ -12,36 +12,46 @@ queuemail {
 	// The configuration for DefaultExampleMailingService has set this to be 2 emails
 	// Meaning after 2 it will fall over to 2nd Configuration
 
+	exampleFrom="usera <userA@gmail.com>"
+	exampleTo="userA_ReplyTo <userA@gmail.com>"
+
 	mailConfigExample1 {
 		host = "smtp.gmail.com"
-		port = 465
-		username = "USERA@gmail.com"
-		password = "PASSWORDA"
+		port = 587
+		username = "userA@gmail.com"
+		password = 'PASSWORD'
 		props = ["mail.debug":"true",
-			  "mail.smtp.auth":"true",
-			"mail.smtp.socketFactory.port":"465",
-			"mail.smtp.socketFactory.class":"javax.net.ssl.SSLSocketFactory",
-			"mail.smtp.socketFactory.fallback":"false"]
+				 "mail.smtp.user":"userA@gmail.com",
+				 "mail.smtp.host": "smtp.gmail.com",
+				 "mail.smtp.port": "587",
+				 "mail.smtp.auth": "true",
+				 "mail.smtp.starttls.enable":"true",
+				 "mail.smtp.EnableSSL.enable":"true",
+				 "mail.smtp.socketFactory.class":"javax.net.ssl.SSLSocketFactory",
+				 "mail.smtp.socketFactory.fallback":"false",
+				 "mail.smtp.socketFactory.port":"465"
+		]
 	}
-	
-	// In our example we only have 2 examples both set to 2 emails.
-	// After 4 emails all jobs bound to defaultExampleMailingService will not be
-	// sent instead status changed to error in the queue list
-	// In effect setting a daily cap per account
-	// The caps are checked over a daily basis whilst app is running
-	// so if app is running for 2 days on 2nd day caps are reset
+	mailConfigExample1.fromAddress="USERAAA <userA@gmail.com>"
+
 	mailConfigExample2 {
-		
-	  host = "smtp.gmail.com"
-	  port = 465
-	  username = "USERB@gmail.com"
-	  password = "PASSWORDB"
-	  props = ["mail.debug":"true",
-			  "mail.smtp.auth":"true",
-			"mail.smtp.socketFactory.port":"465",
-			"mail.smtp.socketFactory.class":"javax.net.ssl.SSLSocketFactory",
-			"mail.smtp.socketFactory.fallback":"false"]
+		host = "smtp.gmail.com"
+		port =587
+		username = "userB@gmail.com"
+		password = 'PASSWORD'
+		props = ["mail.debug":"true",
+				 "mail.smtp.user":"userB@gmail.com",
+				 "mail.smtp.host": "smtp.gmail.com",
+				 "mail.smtp.port": "587",
+				 "mail.smtp.auth": "true",
+				 "mail.smtp.starttls.enable":"true",
+				 "mail.smtp.EnableSSL.enable":"true",
+				 "mail.smtp.socketFactory.class":"javax.net.ssl.SSLSocketFactory",
+				 "mail.smtp.socketFactory.fallback":"false",
+				 "mail.smtp.socketFactory.port":"465"
+		]
 	}
+	mailConfigExample2.fromAddress="userBB<userB@gmail.com>"
 	
 	/*
 	 * keepAliveTime in seconds

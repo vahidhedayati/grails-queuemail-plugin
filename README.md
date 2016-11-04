@@ -131,8 +131,8 @@ queuemail {
 ## Gmail had to be configured differently to work via this plugin:
 ```groovy
 queuemail {
-        exampleFrom="badvad <userA@gmail.com>"
-        exampleTo="badvad <userB@gmail.com>"
+       exampleFrom="usera <userA@gmail.com>"
+       	exampleTo="userA_ReplyTo <userA@gmail.com>"
         //standardRunnable = true
         emailPariorities = [
                         defaultExample:org.grails.plugin.queuemail.enums.Priority.REALLYSLOW

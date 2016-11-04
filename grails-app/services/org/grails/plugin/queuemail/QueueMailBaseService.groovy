@@ -24,12 +24,12 @@ abstract class QueueMailBaseService  implements GrailsApplicationAware {
 
 	abstract def configureMail(executor, EmailQueue queue)
 
-	def sendMail(executor,queue,jobConfigurations) {
+	def sendMail(executor,queue,jobConfigurations,Class clazz) {
 		boolean failed=true
 		String error=''
 		try {
 			if (jobConfigurations) {
-				String sendAccount = executor.getSenderCount(jobConfigurations)
+				String sendAccount = executor.getSenderCount(clazz,jobConfigurations,queue.id)
 				if (sendAccount) {
 					queueMailService.sendEmail(sendAccount,queue)
 					failed=false							

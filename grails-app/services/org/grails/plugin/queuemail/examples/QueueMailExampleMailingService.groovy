@@ -18,7 +18,7 @@ class QueueMailExampleMailingService extends QueueMailBaseService {
 				'mailConfigExample2': 100,
 			]		
 		
-		sendMail(executor,queue,jobConfigurations)
+		sendMail(executor,queue,jobConfigurations,QueueMailExampleMailingService.class)
 	}
 	
 	

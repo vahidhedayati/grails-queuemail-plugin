@@ -4,6 +4,7 @@ import grails.util.Holders
 import org.grails.plugin.queuemail.enums.Priority
 import org.grails.plugin.queuemail.enums.QueueStatus
 import org.grails.plugin.queuemail.helpers.QueueHelper
+import org.grails.plugin.queuemail.monitor.ServiceConfigs
 
 import java.util.concurrent.*
 
@@ -18,67 +19,126 @@ class EmailExecutor extends ThreadPoolExecutor {
 	private static int minPreserve = Holders.grailsApplication.config.queuemail?.preserveThreads ?: 0
 	private static Priority definedPriority = Holders.grailsApplication.config.queuemail?.preservePriority ?: Priority.MEDIUM
 	private static boolean defaultComparator = Holders.grailsApplication.config.queuemail.defaultComparator
-	
+
 	private static int killLongRunningTasks = Holders.grailsApplication.config.queuemail?.killLongRunningTasks ?: 0
 	private static final ConcurrentMap<Runnable, RunnableFuture> runningTasks = new ConcurrentHashMap<Runnable, RunnableFuture>()
-	
-	// Keeps actual counter when current date day is different to senderLastSent all is reset	
-	private static final ConcurrentMap<String, Integer> senderCounter = new ConcurrentHashMap<String, Integer>()
-	//Keeps day of date and Sender String
-	private static final ConcurrentMap<String, Integer> senderLastSent = new ConcurrentHashMap<String, Integer>()
-	
+
 	private static final ConcurrentMap<Long, Runnable> waitingQueue = new ConcurrentHashMap<Long, Runnable>()
 	static final Set<ArrayList> runningJobs = ([] as Set).asSynchronized()
 
+	/**
+	 * Keeps a tab on current sender configuration
+	 * a count of how many sent per account configuration as per your service definition
+	 * this binds to each service you have created and their accounts
+	 * When an account reaches it's limit for the day, it will be set to use the next one
+	 *
+	 * If a configured account fails consequently for configured fail values it will
+	 * mark host as down and use the next account in list. Account will be re-checked as per
+	 * configured recheck value
+	 */
+	private static final ConcurrentMap<Class, List<ServiceConfigs>> senderMap = new ConcurrentHashMap<Class, List<ServiceConfigs>>()
+
+	//Amount of QueueId's from currentID, if host was down to reset - for another attempt
+	private static int elapsedQueue = Holders.grailsApplication.config.queuemail?.elapsedQueue ?: 300
+	//Or amount of time elapsed in seconds between last failure and now
+	private static int elapsedTime = Holders.grailsApplication.config.queuemail?.elapsedTime ?: 1800 // 30 minutes
+
 
 	public EmailExecutor() {
-		super(corePoolSize,maximumPoolSize,keepAliveTime,timeoutUnit, 
-			new PriorityBlockingQueue<Runnable>(maxQueue,new EmailComparator()) 
+		super(corePoolSize,maximumPoolSize,keepAliveTime,timeoutUnit,
+				new PriorityBlockingQueue<Runnable>(maxQueue,new EmailComparator())
 		)
 	}
-
-	static String getSenderCount(jobConfigurations) {
-		int currentCounter=1
+	/**
+	 * Complex binding of current Class being your serviceClass and its underlying configuration
+	 * Your configuration mapped back in - confirmed if job is there / available for usage
+	 * @param clazz
+	 * @param jobConfigurations
+	 * @param queueId
+	 * @return
+	 */
+	static String getSenderCount(Class clazz, jobConfigurations,Long queueId) {
 		String sendAccount
-		int lastSentDay
 		boolean exists
-		jobConfigurations?.each { String sender, int limit ->
-			if (!sendAccount) {
-				def currentCount = senderCounter.get(sender)
-				int today = ((new Date()).format('dd') as int)
-				lastSentDay = senderLastSent.get(sender)
-				if (currentCount) {
-					exists=true
-					if (currentCount+1 <= limit) {
-						if (today != lastSentDay) {
-							currentCounter = 1
-							lastSentDay=today
+		List<ServiceConfigs> serviceConfigs = senderMap.get(clazz)
+		Date now = new Date()
+		Date lastFailed
+		int today = now.format('dd') as int
+		int lastSendDay,currentCounter,failTotal
+
+		if (serviceConfigs) {
+			jobConfigurations?.each { String sender, int limit ->
+				currentCounter=1
+				lastSendDay=today
+				if (!sendAccount) {
+					ServiceConfigs serviceConfig = serviceConfigs.find { it.jobName == sender }
+					now = new Date()
+					if (serviceConfig && serviceConfig.currentCount) {
+						if (serviceConfig.active) {
+							exists = true
+							if (serviceConfig.currentCount + 1 <= limit) {
+								if (today == serviceConfig.lastDay) {
+									currentCounter = serviceConfig.currentCount + 1
+								}
+								sendAccount = sender
+							} else {
+								if (today != serviceConfig.lastDay) {
+									sendAccount = sender
+								}
+							}
 						} else {
-							currentCounter=currentCount+1
+							if (elapsedQueue && queueId - serviceConfig.lastQueueId > elapsedQueue || elapsedTime && now.time - serviceConfig.lastFailed.time > elapsedTime) {
+								sendAccount = sender
+								lastFailed = serviceConfig.lastFailed
+								failTotal = serviceConfig.failTotal + serviceConfig.failCount
+							}
 						}
-						sendAccount=sender
 					} else {
-						if (today != lastSentDay) {
-							currentCounter = 1
-							lastSentDay=today
-							sendAccount=sender
-						}
+						sendAccount = sender
 					}
+					if (sendAccount) {
+						if (exists) {
+							serviceConfigs?.remove(serviceConfig)
+						}
+						ServiceConfigs serviceConfig1 = new ServiceConfigs()
+						serviceConfig1.lastDay = lastSendDay
+						serviceConfig1.jobName = sendAccount
+						if (lastFailed) {
+							serviceConfig1.lastFailed = lastFailed
+						}
+						if (failTotal) {
+							serviceConfig1.failTotal = failTotal
+						}
+						serviceConfig1.active = true
+						serviceConfig1.lastQueueId = queueId
+						serviceConfig1.currentCount = currentCounter
+						serviceConfig1.limit=limit
+						serviceConfig1.actioned= now
+						serviceConfigs.add(serviceConfig1)
+					}
+				}
+			}
+		}  else  {
+			jobConfigurations?.eachWithIndex { String sender, int limit, int i ->
+				ServiceConfigs serviceConfig1 = new ServiceConfigs()
+				serviceConfig1.lastDay = today
+				serviceConfig1.jobName = sender
+				serviceConfig1.failTotal = 0
+				serviceConfig1.active = true
+				serviceConfig1.actioned= now
+				serviceConfig1.lastQueueId = queueId
+				serviceConfig1.currentCount = 0
+				serviceConfig1.limit=limit
+				if (i==0) {
+					serviceConfig1.currentCount = 1
+					sendAccount = sender
+					serviceConfigs=[serviceConfig1]
 				} else {
-					currentCounter = 1
-					lastSentDay=today
-					sendAccount=sender
+					serviceConfigs.add(serviceConfig1)
 				}
 			}
 		}
-		if (sendAccount) {
-			if (exists) {
-				senderLastSent.remove(sendAccount)
-				senderCounter.remove(sendAccount)
-			}
-			senderLastSent.put(sendAccount,lastSentDay)
-			senderCounter.put(sendAccount,currentCounter)
-		}
+		senderMap.put(clazz,serviceConfigs)
 		return sendAccount ?: ''
 	}
 
@@ -177,12 +237,12 @@ class EmailExecutor extends ThreadPoolExecutor {
 		ComparableFutureTask task = new ComparableFutureTask(command,null,this,timeoutExecutor,priority,definedPriority.value,maximumPoolSize, minPreserve,slotsFree)
 		super.execute(task)
 	}
-	
+
 	@Override
 	public void shutdown() {
 		super.shutdown()
 	}
-	
+
 	void setMaximumPoolSize(int i) {
 		this.maximumPoolSize=i
 	}

@@ -8,6 +8,7 @@ build/
 .project
 .metadata
 bin/**
+classes/**
 .classpath
 .settings/
 # IDEA
