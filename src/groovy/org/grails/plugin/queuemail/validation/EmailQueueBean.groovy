@@ -23,8 +23,9 @@ class EmailQueueBean  {
 	def queueMailUserService = Holders.grailsApplication.mainContext.getBean('queueMailUserService')
 	def grailsLinkGenerator = Holders.grailsApplication.mainContext.getBean('grailsLinkGenerator')
 
+	
 	def id
-	String emailService		//This will be the service variant that binds in to extract additional info from	
+	String emailService		//This will be the service variant that binds in to extract additional info from
 	Email email
 	Long userId
 	Locale locale
@@ -37,7 +38,7 @@ class EmailQueueBean  {
 	Priority priority
 	String username
 
-	String error
+	List<String> errorLogs
 	String reportType		// Required only for binding to buildReport request
 
 	QueueStatus status=QUEUED
@@ -57,24 +58,24 @@ class EmailQueueBean  {
 		username(nullable:true)
 		queueType(nullable:true)
 		reportType(nullable:true)
-		error(nullable:true)
+		errorLogs(nullable:true)
 	}
 
 	/*
-	 * sets up the bean according to a DB entry 
+	 * sets up the bean according to a DB entry
 	 */
 	def formatBean(queue) {
 		id=queue.id
 		emailService=queue.emailService
-		error=queue.error
+		errorLogs=queue.errorLogs
 		email=queue.email
 		userId=queue.userId
 		locale=queue.locale
 		start=queue.start
 		status=queue.status
-		queueType=queue.queueType		
-		retries=queue.retries				
-		priority = queue?.priority ?:queue?.defaultPriority		
+		queueType=queue.queueType
+		retries=queue.retries
+		priority = queue?.priority ?:queue?.defaultPriority
 		username=queueMailUserService.getUsername(userId)
 		return this
 	}
@@ -84,9 +85,9 @@ class EmailQueueBean  {
 	 * you first create a new instance of this bean and add
 	 * your values to it.
 	 * When it buildsReport it calls this bindReport
-	 * which gives back the required values as map to 
+	 * which gives back the required values as map to
 	 * ongoing function
-	 * 
+	 *
 	 */
 	protected Map bindReport() {
 		def values=[:]

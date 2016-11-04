@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit
 import org.grails.plugin.queuemail.enums.Priority
 import org.grails.plugin.queuemail.enums.QueueStatus
 import org.grails.plugin.queuemail.helpers.QueueHelper
+import org.grails.plugin.queuemail.monitor.ServiceConfigs
 
 
 
@@ -32,14 +33,28 @@ class EmailExecutor extends ThreadPoolExecutor {
 	private static int killLongRunningTasks = Holders.grailsApplication.config.queuemail?.killLongRunningTasks ?: 0
 	private static final ConcurrentMap<Runnable, RunnableFuture> runningTasks = new ConcurrentHashMap<Runnable, RunnableFuture>()
 	
-	// Keeps actual counter when current date day is different to senderLastSent all is reset	
-	private static final ConcurrentMap<String, Integer> senderCounter = new ConcurrentHashMap<String, Integer>()
-	//Keeps day of date and Sender String
-	private static final ConcurrentMap<String, Integer> senderLastSent = new ConcurrentHashMap<String, Integer>()
-	
 	private static final ConcurrentMap<Long, Runnable> waitingQueue = new ConcurrentHashMap<Long, Runnable>()
 	static final Set<ArrayList> runningJobs = ([] as Set).asSynchronized()
 
+	/**
+	 * Keeps a tab on current sender configuration
+	 * a count of how many sent per account configuration as per your service definition
+	 * this binds to each service you have created and their accounts
+	 * When an account reaches it's limit for the day, it will be set to use the next one
+	 *
+	 * If a configured account fails consequently for configured fail values it will
+	 * mark host as down and use the next account in list. Account will be re-checked as per
+	 * configured recheck value
+	 */
+	private static final ConcurrentMap<Class, List<ServiceConfigs>> senderMap = new ConcurrentHashMap<Class, List<ServiceConfigs>>()
+
+	//Amount of QueueId's from currentID, if host was down to reset - for another attempt
+	private static int elapsedQueue = Holders.grailsApplication.config.queuemail?.elapsedQueue ?: 300
+	//Or amount of time elapsed in seconds between last failure and now
+	private static int elapsedTime = Holders.grailsApplication.config.queuemail?.elapsedTime ?: 1800 // 30 minutes
+	private static int failuresTolerated = Holders.grailsApplication.config.queuemail?.failuresTolerated ?: 5 // 5  failures in a row
+
+	
 
 	public EmailExecutor() {
 		super(corePoolSize,maximumPoolSize,keepAliveTime,timeoutUnit, 
@@ -47,48 +62,127 @@ class EmailExecutor extends ThreadPoolExecutor {
 		)
 	}
 	
-	static String getSenderCount(jobConfigurations) {
-		int currentCounter=1
+	static void registerSenderFault(Class clazz, Long queueId, String sendAccount) {
+		List<ServiceConfigs> serviceConfigs = senderMap.get(clazz)
+		ServiceConfigs serviceConfig =serviceConfigs?.find{it.jobName==sendAccount}
+		if (serviceConfig) {
+			ServiceConfigs serviceConfig1 = serviceConfig.clone()
+			serviceConfig1.failCount=1
+
+			if (serviceConfig.lastFailedQueueId && serviceConfig.lastFailedQueueId + 1 == queueId||serviceConfig.lastFailedQueueId== queueId) {
+				serviceConfig1.failCount=serviceConfig.failCount ? (serviceConfig.failCount+1): 1
+			}
+			if (serviceConfig1.failCount >= failuresTolerated) {
+				serviceConfig1.active=false
+			}
+			serviceConfig1.lastFailedQueueId=queueId
+			serviceConfig1.lastQueueId=queueId
+			serviceConfig1.currentCount=serviceConfig1.currentCount ? (serviceConfig1.currentCount+1) : 1
+			serviceConfig1.failTotal=serviceConfig.failTotal ? (serviceConfig.failTotal+1) : 1
+			serviceConfig1.lastFailed=new Date()
+			serviceConfigs.remove(serviceConfig)
+			serviceConfigs.add(serviceConfig1)
+			senderMap.remove(clazz)
+			senderMap.put(clazz,serviceConfigs)
+		}
+	}
+	/**
+	 * Complex binding of current Class being your serviceClass and its underlying configuration
+	 * Your configuration mapped back in - confirmed if job is there / available for usage
+	 * @param clazz
+	 * @param jobConfigurations
+	 * @param queueId
+	 * @return
+	 */
+	static String getSenderCount(Class clazz, jobConfigurations,Long queueId) {
 		String sendAccount
-		int lastSentDay
 		boolean exists
-		jobConfigurations?.each { String sender, int limit ->
-			if (!sendAccount) {	
-				def currentCount = senderCounter.get(sender)
-				int today = ((new Date()).format('dd') as int)
-				lastSentDay = senderLastSent.get(sender)				
-				if (currentCount) {
-					exists=true
-					if (currentCount+1 <= limit) {						
-						if (today != lastSentDay) {							
-							currentCounter = 1
-							lastSentDay=today
+		List<ServiceConfigs> serviceConfigs = senderMap.get(clazz)
+		Date now = new Date()
+		Date lastFailed
+		int today = now.format('dd') as int
+		int lastSendDay,currentCounter,failTotal
+
+		if (serviceConfigs) {
+			jobConfigurations?.each { String sender, int limit ->
+				currentCounter=1
+				failTotal=0
+				lastSendDay=today
+				if (!sendAccount) {
+					ServiceConfigs serviceConfig = serviceConfigs.find { it.jobName == sender }
+					now = new Date()
+					if (serviceConfig && serviceConfig.currentCount) {
+						if (serviceConfig.active) {
+							exists = true
+							if (serviceConfig.currentCount + 1 <= limit) {
+								if (today == serviceConfig.lastDay) {
+									currentCounter = serviceConfig.currentCount + 1
+								}
+								sendAccount = sender
+							} else {
+								if (today != serviceConfig.lastDay) {
+									sendAccount = sender
+								}
+							}
 						} else {
-							currentCounter=currentCount+1
+							if (elapsedQueue && queueId - serviceConfig.lastQueueId > elapsedQueue ||
+									elapsedTime && serviceConfig.lastFailed &&\
+									  now.time - serviceConfig.lastFailed.time > (elapsedTime*1000)) {
+								sendAccount = sender
+								lastFailed = serviceConfig.lastFailed
+								failTotal = serviceConfig.failTotal
+							}
 						}
-						sendAccount=sender
 					} else {
-						if (today != lastSentDay) {
-							currentCounter = 1
-							lastSentDay=today
-							sendAccount=sender
+						if (serviceConfig.active) {
+							sendAccount = sender
 						}
 					}
+					if (sendAccount) {
+						if (exists) {
+							serviceConfigs?.remove(serviceConfig)
+						}
+						ServiceConfigs serviceConfig1 = serviceConfig.clone()
+						serviceConfig1.lastDay = lastSendDay
+						serviceConfig1.jobName = sendAccount
+						if (lastFailed) {
+							serviceConfig1.lastFailed = lastFailed
+						}
+						if (failTotal) {
+							serviceConfig1.failTotal = failTotal
+						}
+						serviceConfig1.active = true
+						serviceConfig1.lastQueueId = queueId
+						serviceConfig1.currentCount = currentCounter
+						serviceConfig1.limit=limit
+						serviceConfig1.actioned= now
+						serviceConfigs.remove(serviceConfig)
+						serviceConfigs.add(serviceConfig1)
+					}
+				}
+			}
+		}  else  {
+			jobConfigurations?.eachWithIndex { String sender, int limit, int i ->
+				ServiceConfigs serviceConfig1 = new ServiceConfigs()
+				serviceConfig1.lastDay = today
+				serviceConfig1.jobName = sender
+				serviceConfig1.failTotal = 0
+				serviceConfig1.active = true
+				serviceConfig1.actioned= now
+				serviceConfig1.lastQueueId = queueId
+				serviceConfig1.currentCount = 0
+				serviceConfig1.limit=limit
+				if (i==0) {
+					serviceConfig1.currentCount = 1
+					sendAccount = sender
+					serviceConfigs=[serviceConfig1]
 				} else {
-					currentCounter = 1
-					lastSentDay=today
-					sendAccount=sender
+					serviceConfigs.add(serviceConfig1)
 				}
 			}
 		}
-		if (sendAccount) {
-			if (exists) {
-				senderLastSent.remove(sendAccount)
-				senderCounter.remove(sendAccount)
-			}
-			senderLastSent.put(sendAccount,lastSentDay)
-			senderCounter.put(sendAccount,currentCounter)
-		}
+		senderMap?.remove(clazz)
+		senderMap.put(clazz,serviceConfigs)
 		return sendAccount ?: ''
 	}
 

@@ -11,7 +11,7 @@
 			<div class="col-sm-12 well">
 				<g:message code="reportThreadLimit${reportJob.isAdvanced?'Advanced':''}.${reportJob.queueType}${reportJob.minPreserve?'':'.label'}" 
 				args="${[reportJob.maxPoolSize,reportJob.running,reportJob.queued,reportJob.minPreserve,reportJob.priority,
-					reportJob.limitUserBelowPriority,reportJob.limitUserAbovePriority,reportJob.forceFloodControl,reportJob.maxQueue]}"/>								
+					reportJob.elapsedTime,reportJob.elapsedQueue,reportJob.failuresTolerated,reportJob.maxQueue]}"/>
 				<g:if test="${reportJob.executorCount}">
 					<div class="alert alert-success"><span class="circle"></span> 
 						<g:message code="userThreadbreakDown.label" args="${[reportJob.executorCount.userRunningBelow,reportJob.executorCount.userRunningAbove,
@@ -21,6 +21,24 @@
 						<span class="circle"></span> <g:message code="reportThreadbreakDown.label" args="${[reportJob.executorCount.runningBelow,reportJob.executorCount.runningAbove,
 							reportJob.executorCount.queuedBelow,reportJob.executorCount.queuedAbove,reportJob.priority?:'']}"/>
 					</div>
+					<div >
+					<g:each in="${reportJob.serviceConfigs}" var="serviceConfig">
+						<div class="col-sm-12">
+						<div class="col-sm-4">
+						${serviceConfig.service}
+						</div>
+						<div class="col-sm-6">
+						<g:each in="${serviceConfig.info}" var="info">
+							<div class="alert alert-success">
+								<span class="circle"></span>
+								<g:message code="configBreakown.label" args="${[info.jobName,info.limit,info.currentCount,info.failTotal,info.failCount,info.actioned]}"/>
+							</div>
+						</g:each>
+						</div>
+						</div>
+					</g:each>
+					</div>
+
 				</g:if>
 			</div>
 			<br/>
@@ -42,6 +60,10 @@
 				<g:sortableColumn property="initiation" titleKey="queuemail.initiation.label" params="${search}" />
 				<g:sortableColumn property="finishDate" titleKey="queuemail.finishDate.label" params="${search}" />
 				<g:sortableColumn property="duration" titleKey="queuemail.duration.label" params="${search}" />
+				<g:sortableColumn property="status" titleKey="queuemail.status.label" params="${search}" />
+				<g:sortableColumn property="from" titleKey="queuemail.searchType.FROM" params="${search}" />
+				<g:sortableColumn property="to" titleKey="queuemail.searchType.TO" params="${search}" />
+				<g:sortableColumn property="subject" titleKey="queuemail.searchType.SUBJECT" params="${search}" />
 				<g:if test="${showUserField}">
 				<g:sortableColumn property="userId" titleKey="queuemail.username.label" params="${search}" />
 				</g:if>
@@ -51,7 +73,8 @@
 				<g:unless test="${hideQueuePriority}">
 				<g:sortableColumn property="priority" titleKey="queuemail.reportPriority.label" params="${search}" />
 				</g:unless>
-				<g:sortableColumn property="status" titleKey="queuemail.status.label" params="${search}" />
+
+
 				<th>&nbsp;</th>
 			</tr>
 		</thead>
@@ -70,6 +93,9 @@
 					<td class="small" style="background: ${reportInstance.initiationColor?:'transparent'}">${reportInstance.initiation?:''}</td>
 					<td class="small"><g:formatDate format="${dateFormat}" date="${reportInstance.finishDate}"/></td>
 					<td class="small" style="background: ${reportInstance.color?:'transparent'}">${reportInstance.duration?:''}</td>
+					<td class="small">${reportInstance.email.from}</td>
+					<td class="small">${reportInstance.email.to}</td>
+					<td class="small">${reportInstance.email.subject}</td>
 					<g:if test="${showUserField}">
 					<td>${reportInstance.username?:reportInstance.userId}</td>
 					</g:if>
@@ -81,15 +107,12 @@
 					</g:unless>
 					<td><g:message code="queuemail.reportType.${reportInstance.status}"/></td>
 					<td class="dropdown queuekit">
-					<g:if test="${reportInstance.status== QueueStatus.COMPLETED}">
-						<g:link action="download" class="btn btn-default" id="${reportInstance.id}"><g:message code="queuemail.reportType.${reportInstance.status}"/></g:link>
-					</g:if>
-					
-					<g:else>
+
 					<i  class="btn btn-default" id="${reportInstance.id}">
 					<g:message code="queuemail.reportType.${reportInstance.status}"/>
+
 					</i>
-					</g:else>					
+
 					<a  class="btn btn-default actionButton" data-toggle="dropdown"
 					  data-row-id="${reportInstance.id}" data-queueType="${reportInstance.queueType}" data-row-status="${reportInstance.status}">
 					   <span class="arrow-down"></span>						  

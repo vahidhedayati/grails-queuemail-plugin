@@ -1,23 +1,24 @@
 package org.grails.plugin.queuemail.validation
 
+import static org.grails.plugin.queuemail.enums.SearchTypes.*
 import grails.util.Holders
 import grails.validation.Validateable
-import static org.grails.plugin.queuemail.enums.SearchTypes.*
+
 import org.grails.plugin.queuemail.EmailQueue
+import org.grails.plugin.queuemail.enums.QueueStatus
+import org.grails.plugin.queuemail.enums.SearchTypes
 
 @Validateable
 class QueueMailBean {
 
 	def queueMailUserService = Holders.grailsApplication.mainContext.getBean('queueMailUserService')
 
-
 	Long userId
-
-	String searchBy
+	SearchTypes searchBy
 	String searchFor
 	Long userSearchId
 	boolean hideUsers=true
-	String status
+	QueueStatus status
 
 	Integer max=Math.min(10, 50)
 	Integer offset
@@ -126,5 +127,4 @@ class QueueMailBean {
 	void setMax(Integer o) {
 		max= Math.min(o ? o : 10, 50)
 	}
-
 }

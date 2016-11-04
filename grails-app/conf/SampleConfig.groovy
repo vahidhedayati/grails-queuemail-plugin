@@ -152,5 +152,42 @@ queuemail {
 	 * If you no longer wish to show report priority on report screen switch this to true 
 	 */
 	hideQueuePriority=false
+	
+	/**
+	 * -----------------------------------------------------
+	 * Configuration for unreliable smtp services
+	 *
+	 * Failure attempts - re-attempts
+	 * -----------------------------------------------------
+	 */
+
+	/**
+	 * If 5 emails fail consecutively it will then mark the smtp service as down
+	 * Global configuration for all. By default this is 5.
+	 *
+	 * 5 emails failing will also fall inline with - email resending if it could not send.
+	 * If your service has 2 configurations and first element has 10 limit and this value is configured as 2
+	 *
+	 * Upon triggering your first email, that first email will attempt delivery if it fails, it will try again and it
+	 * will hit this same host - the counter will increment - after 2 failures it gives up and moves to next config
+	 *
+	 * All new emails will now bypass that first config and go to 2nd configuration
+	 *
+	 */
+	failuresTolerated =  5 // 5  failures in a row
+
+	/**
+	 * Once 300 new queueId's have gone through - by default
+	 * change this to another value
+	 * once it goes beyond this value it will add that above marked down host back into the pool and try to send email
+	 * It will again go through above failuresTolerated (if still down) and fail
+	 */
+	elapsedQueue = 300
+
+	/**
+	 * If the system does not generate much emails then the OR if it hits 1800 seconds (30 minutes) by default
+	 * like above it will smtp config back into pool
+	 */
+	elapsedTime =  1800 // 30 minutes
 }
 

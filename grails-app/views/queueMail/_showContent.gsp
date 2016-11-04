@@ -62,10 +62,10 @@
 		<label class="bold"><g:message code="queuemail.reportPriority.label"/></label>
 		${instance?.priority?:''}
 	</div>
-	<g:if test="${instance.error}">
+	<g:if test="${instance.errorLogs}">
 	<div>
-		<label class="bold"><g:message code="queuemail.reportPriority.label"/></label>
-		${instance.error}
+		<label class="bold"><g:message code="queuemail.reportType.ERROR"/></label>
+		${instance.errorLogs}
 	</div>
 	</g:if>
 </div>

@@ -15,6 +15,7 @@ import org.grails.plugin.queuemail.enums.Priority
 import org.grails.plugin.queuemail.events.BasicQueuedEvent
 import org.grails.plugin.queuemail.events.EmailQueuedEvent
 import org.grails.plugin.queuemail.helpers.QueueHelper
+import org.grails.plugin.queuemail.monitor.ServiceConfigs
 import org.grails.plugin.queuemail.validation.EmailQueueBean
 import org.grails.plugin.queuemail.validation.QueueMailBean
 import org.grails.plugin.queuemail.validation.QueueMailLists
@@ -312,9 +313,9 @@ class QueueMailApiService {
 		def query
 		def where=''
 		def whereParams=[:]
-		def sorts=['emailService', 'created', 'startDate', 'finishDate' ,'user', 'status', 'priority','queueType','duration','initiation','userId']
+		def sorts=['emailService', 'created', 'startDate', 'finishDate' ,'user', 'status', 'priority','queueType','duration','initiation','userId','from','to','subject']
 		def sorts2=['rq.emailService', 'rq.created', 'rq.start','rq.finished','rq.userId','rq.status', 'rq.priority','rq.class',
-			'internalDuration','internalInitiation','rq.userId']
+			'internalDuration','internalInitiation','rq.userId','e.from','e.to','e.subject']
 			
 		def sortChoice=sorts.findIndexOf{it==bean.sort}
 		boolean showUserField
@@ -355,26 +356,32 @@ class QueueMailApiService {
 				statuses << bean.status
 			}
 		} else {
-			add='not'			
+			add='not'
 			statuses << SENT
-			statuses << DELETED			
+			statuses << DELETED
 		}
 		where=addClause(where,"rq.status ${add} in (:statuses) ")
 		whereParams.statuses=statuses
-
 		if (bean.searchBy) {
 			if (bean.searchBy==FROM) {
-				where=addClause(where,'rq.emailService like :reportSearch')
-				whereParams.reportSearch='%'+bean.searchFor+'%'
-			} else if (bean.searchBy==USER && bean.superUser) {
-				Long userId = queueMailUserService.getRealUserId(bean.searchFor)
-				if (userId) {
-					where=addClause(where,'rq.userId=:userId')
-					whereParams.userId=userId
-					showUserField=true
+				where = addClause(where, 'lower(e.from) like :from')
+				whereParams.from = '%' + bean.searchFor.toLowerCase() + '%'
+			}else if (bean.searchBy==TO) {
+				where = addClause(where, 'lower(e.to) like :to')
+				whereParams.to = '%' + bean.searchFor.toLowerCase() + '%'
+			}else if (bean.searchBy==SUBJECT) {
+				where = addClause(where, 'lower(e.subject) like :subject')
+				whereParams.subject = '%' + bean.searchFor.toLowerCase() + '%'
+			}else {
+				if (bean.searchBy==USER && bean.superUser) {
+					Long userId = queueMailUserService.getRealUserId(bean.searchFor)
+					if (userId) {
+						where=addClause(where,'rq.userId=:userId')
+						whereParams.userId=userId
+						showUserField=true
+					}
 				}
 			}
-
 		}
 		
 		query+=where
@@ -440,7 +447,7 @@ class QueueMailApiService {
 		}
 	}
 	TimeDuration customDuration( TimeDuration tc ) {
-		new TimeDuration(  tc.days , tc.hours, tc.minutes, tc.seconds, ((tc.seconds > 0||tc.minutes > 0||tc.hours > 0) ? 0 : tc.millis))
+		new TimeDuration(tc.days , tc.hours, tc.minutes, tc.seconds, ((tc.seconds > 0||tc.minutes > 0||tc.hours > 0) ? 0 : tc.millis))
 	}
 	private String returnColor(List threshHold,TimeDuration duration) {
 		String color=''
@@ -460,8 +467,9 @@ class QueueMailApiService {
 	 * Works out and returns a map of total jobs queued / running and available limit
 	 */
 	Map getJobsAvailable(String queueType=null,int defaultPriority=null,Long userId=null) {
-		int queued,running,maxPoolSize,minPreserve,limitUserBelowPriority,limitUserAbovePriority,forceFloodControl,maxQueue
+		int queued,running,maxPoolSize,minPreserve,maxQueue,elapsedQueue,elapsedTime,failuresTolerated
 		boolean isAdvanced
+		List serviceConfigs=[]
 		Priority priority
 		def executorCount=[:]
 		switch (queueType) {
@@ -471,13 +479,12 @@ class QueueMailApiService {
 				running=basicExecutor.getActiveCount()
 				maxPoolSize=basicExecutor.maximumPoolSize
 				maxQueue=basicExecutor.maxQueue
-				minPreserve=basicExecutor.minPreserve			
+				minPreserve=basicExecutor.minPreserve
+				elapsedQueue=basicExecutor.elapsedQueue
+				elapsedTime=basicExecutor.elapsedTime
+				failuresTolerated=basicExecutor.failuresTolerated
+				serviceConfigs=listServiceConfigurations(basicExecutor)
 				isAdvanced=true
-				
-				if (minPreserve>0) {
-					priority=basicExecutor.definedPriority
-				}
-
 				break
 			case "${ENHANCED}":
 				executorCount = QueueHelper.executorCount(EmailExecutor.runningJobs,emailExecutor.getQueue(),defaultPriority,userId)
@@ -486,18 +493,37 @@ class QueueMailApiService {
 				maxPoolSize=EmailExecutor.maximumPoolSize
 				maxQueue=EmailExecutor.maxQueue
 				minPreserve=EmailExecutor.minPreserve
+				elapsedQueue=emailExecutor.elapsedQueue
+				elapsedTime=emailExecutor.elapsedTime
+				failuresTolerated=emailExecutor.failuresTolerated
+				serviceConfigs=listServiceConfigurations(emailExecutor)
 				isAdvanced=true
 				if (minPreserve>0) {
 					priority=EmailExecutor.definedPriority
 				}
 				break
 		}
-		return [queueType:queueType ?: ENHANCED  , maxPoolSize:maxPoolSize,
-			limitUserBelowPriority:limitUserBelowPriority,limitUserAbovePriority:limitUserAbovePriority,
-			forceFloodControl:forceFloodControl,isAdvanced:isAdvanced,maxQueue:maxQueue,
+		return [queueType:queueType ?: ENHANCED  , maxPoolSize:maxPoolSize,serviceConfigs:serviceConfigs,
+				elapsedTime:elapsedTime,elapsedQueue:elapsedQueue,
+				failuresTolerated:failuresTolerated,isAdvanced:isAdvanced,maxQueue:maxQueue,
 			running:running,queued:queued,minPreserve:minPreserve,priority:priority,executorCount:executorCount]
 	}
 
+	List listServiceConfigurations(executor) {
+		List results=[]
+		executor.senderMap?.each { Class clazz, List<ServiceConfigs> serviceConfigs ->
+				Map result = [:]
+				result.service=clazz.simpleName
+				result.info=[]
+				serviceConfigs?.each { ServiceConfigs serviceConfig ->
+					result.info << serviceConfig.getResults()
+				}
+			results << result
+		}
+		return results
+	}
+
+	
 	def buildEmail(EmailQueueBean bean) {
 		functionReport(bean.bindReport())
 	}
