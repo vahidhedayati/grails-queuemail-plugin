@@ -1,15 +1,21 @@
 Grails QueueMail plugin
 =========================
 
-Queuemail plugin will queue your mail and limited to your pool configuration. You can configure multiple mail accounts
-to send from and create services that bind the relevant accounts for a given task i.e.:
- 
-```		
-mailConfig1   --> This binds to Config.groovy object: mailConfig1:{username:abc, password:bbc, host:smtp.mymailservice.com  }
-mailConfig2  --> This binds to Config.groovy object: mailConfig2: {username:bbc, password:bbc1, host:smtp.mymailservice.com }
-```
+Queuemail plugin is a centralised email queueing system, provides a `BASIC` and `ENHANCED` mode. difference enhanced has
+and inner thread launched but then attempts to kill stuck inner threads. Emails that arrive are processed through priority
+rules configured by you. You can define how many active concurrent email threads can be running at any one time and how many
+can await in the queue to be served.  Each email is then bound to `emailService` that you create and within it you define
+the `email configuration names` the email can use and what each email configuration's `limit is per day`.
+The queueing system will use the first provided configuration to run from. If this first or top element goes offline or
+was configured incorrectly it will hit a threshold and plugin will mark it down. When either it is marked down due to errors
+or it has reached defined capacity the plugin will then return the next config and work this way.
 
-You can configure multiple mail accounts like shown above. The example has 2 email accounts that it uses to send email's from, once the first has hit limit of 2 it will from there on try to use next mailConfig in list. This could be a list of many other mailConfigurations and obviously higher limits per account.
+If a host is down or not configured correctly the very first email to hit this issue is re-attempted again through it for
+the amount of times `failuresTolerated` is configured for. This sole email will be then mark it as down by re-repeating and
+when it is marked down it will finally be attempted through the next configuration itself. Meaning it won't give up there
+for that email. My tests of 2 failure and a badly configured account ended up in 3 attempts to send 1st email then 1 attempt
+for the email after that through seconday configuration.
+
 
 Whilst making this plugin the issue of TOC violation came up. Please check with your SMTP provider to ensure you are not violating any TOC's whilst attempting to keep within their set limits/boundaries and consequently switching accounts/providers.
 
@@ -37,14 +43,10 @@ compile ":queuemail:1.0"
 [Configuration for grails 2 Config.groovy](https://github.com/vahidhedayati/grails-queuemail-plugin/tree/grails2/grails-app/conf/SampleConfig.groovy)
 
 
-
 ## Configuration for unreliable SMTP services
 
-Please visit above configuration links and read through the comments of configuration examples provided.
-You can make this plugin mark an SMTP provider that fails to consecutively send emails as down, so further emails are
-sent via the next configuration element. You can also configure triggers to attempt to re-enable a configuration that has
-been automtically marked down. Please read the comments provided in above configuration links.
-
+Please visit above configuration links and read through the comments provided. At the very bottom it covers
+how to mark down a configuration element if it fails to consecutively send emails.
 
 ## Basic service the defines SMTP configurations (that are binded to Config objects and limitations per day)
 ```groovy
@@ -66,11 +68,9 @@ class QueueMailExampleService extends QueueMailBaseService {
 	}
 }
 ```
-
-When using this plugin you can configure `mailConfig1.fromAddress` for each configuration. If this is configured when
- you create an email as per example's below. The actual `from` address you provide will become `replyTo` and from will
- be set as `mailConfig1.fromAddress`.
-If you do not provide this then it will be set to the `from` address provided as per email.
+Please configure `{configName}.fromAddress` as shown below. Please note when this is set the  actual `from` address you
+provide will become `replyTo` and from will  be set as `mailConfig1.fromAddress`. If you do not provide this then
+nothing is changed.
 
 Now with queueMailExample service created, refer to `SampleConfig.groovy` add the relevant accounts to the
 configuration as shown to match with above names. In the most basic form if you add the following to your
@@ -118,7 +118,7 @@ queuemail {
 
 
 ## Example configuration for application.groovy on grails 3
-whilst testing gmail all these extra keys were required to get plugin to send emails through them (only under grails 3)
+whilst testing gmail all these extra keys were required  (only under grails 3)
 
 ```groovy
 import org.grails.plugin.queuemail.enums.QueueTypes
@@ -179,7 +179,8 @@ queuemail {
 }
 ```
 
-[Here are some ways you now call your service:](https://github.com/vahidhedayati/grails-queuemail-plugin/blob/master/grails-app/controllers/org/grails/plugin/queuemail/QueueTestController.groovy)
+[Here are some examples](https://github.com/vahidhedayati/grails-queuemail-plugin/blob/master/grails-app/controllers/org/grails/plugin/queuemail/QueueTestController.groovy)
+you now call your service. Please refere to examples for further ways of using the `new Email` method
 
 ```groovy
 
@@ -194,9 +195,7 @@ queuemail {
 					//html: params
 			).save(flush: true)
 			def queue = queueMailApiService.buildEmail(EXAMPLE_SERVICE, userId, locale, message)
-			flash.message = g.message(code: 'queuemail.reportQueued.label', args: ['TestTextEmail', queue?.id])
-			render view:VIEW
-			return
+
 
             //HTML TEMPLATE
 			//This loads in a template and provides model which is the instance list for template
@@ -216,50 +215,13 @@ queuemail {
 				log.error message.errors
 			}
 			def queue = queueMailApiService.buildEmail(EXAMPLE_SERVICE, userId, locale, message)
-			flash.message = g.message(code: 'queuemail.reportQueued.label', args: ['testTemplateEmail', queue?.id])
-			render view:VIEW
-			return
-
-			//BODY HTML
-			Email message = new Email(
-					from: config.exampleFrom,
-					to: [config.exampleTo],
-					subject: 'Subject',
-					body: '<html>HTML text</html>'
-			)
-			if (!message.save(flush: true)) {
-				log.error message.errors
-			}
-			def queue = queueMailApiService.buildEmail(EXAMPLE_SERVICE, userId, locale, message)
-			flash.message = g.message(code: 'queuemail.reportQueued.label', args: ['testBodyEmail', queue?.id])
-
-
-            /**
-             * In order to get your email addresses validated use this method
-             * @return
-             */
-			Email message = new Email(
-					from: config.exampleFrom,
-					subject: 'Subject',
-					body: "<html>HTML text ${new Date()}</html>"
-			)
-			message.to([config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo])
-			//BCC
-			//message.bcc([config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo])
-			//CC
-            //message.cc([config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo])
-			if (!message.save(flush:true)) {
-				log.error message.errors
-			}
-			def queue = queueMailApiService.buildEmail(EXAMPLE_SERVICE,userId, locale, message)
-			flash.message = g.message(code: 'queuemail.reportQueued.label', args: ['testListTo', queue?.id])
-
 
 ```
 
 
-in buildEmail it calls queueMailExample which maps up to QueueMailExampleMailingService and pulls in relevant
-configuration and runs the email through it's queueing system.
+`buildEmail` calls `queueMailExample` aka `EXAMPLE_SERVICE` which maps up to QueueMailExampleMailingService and pulls
+in relevant configuration and runs the email through it's queueing system.
+
 Queues are limited to defined queue limitations as per configuration.
 Long outstanding jobs should be killed off automatically if ENHANCED method is used. (refer to configuration links)
 
@@ -270,23 +232,16 @@ This way each user can only view their own email queue and admin or super users 
 The queuekit plugin discusses `queuekitUserService` change that to `queueMailUserService` and any reference to how you
 override it for this plugin.
 
+You could have multiple services that have totally different sets of email configurations to pickup and depending on
+ your scenario then traffic the email to use serviceA or serviceB.
 
-In short your email's will go through a queueing system with limitations as to how many email threads can run
-concurrently, regardless of email traffic sent through queueing system. You can change account configurations
- and send via different accounts if required.
-
-To send through accounts for the same email task, you may have to create multiple services like above example each
-covering the account(s) to be used then when scenario A is hit you use serviceA when scenarioB is hit you use serviceB.
- Each will then route email's according to account configurations like shown above.
-
-
-You also get an interface to view what has been sent / queued. Jobs that fail due to what ever reason are marked as
-error and error results are captured and can be viewed via the display pop up screen on queuemail listing.
-For example change one of your account's password so that it fails then look at the email you sent through it
-through the listing screen / display option.
+The plugin also provides  `queueMail/listQueue`  controller / action that gives you an overview of how your
+emails are being processed. It provides detailed information as to each emailService triggered and their underlying
+configuration status/health.
 
 
 ## Configuring grails sendgrid plugin to with queuemail plugin
+
 Please note this is an example tested and working, whilst the theory of this was only tested with sendgrid. You will
 easily be able to repeat the same process to use other third party plugins/methods you already use by changing the bit
 that does the work for sendGrid plugin.
@@ -322,22 +277,19 @@ A new controller action:
         }
 ```
 
-Now the MyExampleMailingService is a little like [example provided]
+Now the MyExampleMailingService is enhancements on above [QueueMailExampleService]
 (https://github.com/vahidhedayati/grails-queuemail-plugin/blob/master/grails-app/services/org/grails/plugin/queuemail/examples/QueueMailExampleMailingService.groovy)
 
-but it also defines `@Override
-                    	def sendMail(executor,queue,jobConfigurations,Class clazz) {`
+but it also defines `def sendMail(executor,queue,jobConfigurations,Class clazz) {`
+My first configured job is
+In short if you look for  `'sendGrid': 2,`. Then in the sendMail segment `if (sendAccount=='sendGrid') {`.
+When it hits this it will come out of the process the plugin takes and do my new additional work with sendGrid.
+You can obviously make this into a case statement or wrap further if's to do other third party email sending methods.
+It then falls back into else and proceeds with normal plugin stuff. The result is after 2 emails `executor.getSenderCount`
+will no longer return  `sendGrid` and therefore it will hit the else block and carry on to `mailConfigExample2` procssed
+by actual plugin.
 
-If you look through that bit you will see I manually intefered with the configName(sendAccount) (verified via queuemail plugin).
-If sendAccount was 'sendGrid' (as per first top definition that has a daily limit of 2).
-This is then manually called through my check and email sent that way. The rest of the code and including the else block
- will be needed. This will then keep the process flowing via the plugin. After 2 emails my next email was sent through
- normal plugin mailConfigExample2 which uses the default grails mail plugin method to send emails
- (as discussed all of above)
-
- So simply change the bit under`	println "Sending via sendGrid"` to go through your other third party service.
-
- That is all there is to it
+## That is all there is to it :)
 
 ```groovy
 
@@ -374,12 +326,11 @@ class MyExampleMailingService extends QueueMailBaseService {
 							sendGridService.sendMail {
 								from "${queue.email.from}"
 								queue.email?.to?.each { t ->
-									println "sending to ${t}"
 									to "${t}"
 								}
 
-								subject queue.email.subject+"-- from sendgrid"
-								body +queue.email.text+" from sendGrid"
+								subject queue.email.subject
+								body queue.email.text+" from sendGrid"
 							}
 						} catch (Exception e) {
 							println "SendGrid had error E: ${e}"
