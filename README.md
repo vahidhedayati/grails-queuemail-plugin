@@ -19,7 +19,7 @@ Whilst making this plugin the issue of TOC violation came up. Please check with 
 
 ### Grails 3:
 ```groovy
-compile "org.grails.plugins:queuemail:1.1"
+compile "org.grails.plugins:queuemail:1.2"
 ```
 
 ##### [source](https://github.com/vahidhedayati/grails-queuemail-plugin/) 
@@ -40,14 +40,10 @@ compile ":queuemail:1.0"
 
 ## Configuration for unreliable SMTP services
 
-Please visist above configuration links and read through the comments of configuration examples provided.
-You can make the plugin mark an SMTP provider that fails to send an email down and also let it then try to re-enable
- itself after a given amount of queueuId increments or given time period.
-If an email fails to be sent from configExample1 (due to host down bad username/password) it will attempt that same
-configuration element for the set `failuresTolerated`. If this is set to 2 then after 2 failures of the same attempt it
-will move to 2nd configExample and send Email. So email is sent and the process of marking a configuration
-(SMTP service) as down kind of happens through 1 email just retrying to re-send. This probably needs more work.
-As mentioned it is given further chances and you can control that. So do read on.
+Please visit above configuration links and read through the comments of configuration examples provided.
+You can make this plugin mark an SMTP provider that fails to consecutively send emails as down, so further emails are
+sent via the next configuration element. You can also configure triggers to attempt to re-enable a configuration that has
+been automtically marked down. Please read the comments provided in above configuration links.
 
 
 ## Basic service the defines SMTP configurations (that are binded to Config objects and limitations per day)
@@ -121,7 +117,8 @@ queuemail {
 ```	
 
 
-## Example configuration for application.groovy on grails 3 (whilst testing gmail all these extra keys required)
+## Example configuration for application.groovy on grails 3
+whilst testing gmail all these extra keys were required to get plugin to send emails through them (only under grails 3)
 
 ```groovy
 import org.grails.plugin.queuemail.enums.QueueTypes
@@ -183,8 +180,6 @@ queuemail {
 ```
 
 [Here are some ways you now call your service:](https://github.com/vahidhedayati/grails-queuemail-plugin/blob/master/grails-app/controllers/org/grails/plugin/queuemail/QueueTestController.groovy)
-
-
 
 ```groovy
 
@@ -264,15 +259,16 @@ queuemail {
 
 
 in buildEmail it calls queueMailExample which maps up to QueueMailExampleMailingService and pulls in relevant
-configuration and runs the email through it's queuing system.Queues are limited to defined queue limitations as
-per configuration.
-
-
-Long outstanding jobs should be killed off automatically if ENHANCED method is used.
+configuration and runs the email through it's queueing system.
+Queues are limited to defined queue limitations as per configuration.
+Long outstanding jobs should be killed off automatically if ENHANCED method is used. (refer to configuration links)
 
 
 Feel free to refer to [queuekit plugin](https://github.com/vahidhedayati/grails-queuekit-plugin) which may give more
-insight into some of the configuration values.
+insight into some of the additional values not covered such as binding your application with the plugin.
+This way each user can only view their own email queue and admin or super users can view all as per default screen.
+The queuekit plugin discusses `queuekitUserService` change that to `queueMailUserService` and any reference to how you
+override it for this plugin.
 
 
 In short your email's will go through a queueing system with limitations as to how many email threads can run
@@ -344,13 +340,9 @@ This is then manually called through my check and email sent that way. The rest 
  That is all there is to it
 
 ```groovy
-package test
 
-import grails.web.context.ServletContextHolder
 import org.grails.plugin.queuemail.EmailQueue
 import org.grails.plugin.queuemail.QueueMailBaseService
-import org.springframework.web.context.request.RequestContextHolder
-import org.springframework.web.context.support.WebApplicationContextUtils
 
 class MyExampleMailingService extends QueueMailBaseService {
 
@@ -379,19 +371,20 @@ class MyExampleMailingService extends QueueMailBaseService {
 					if (sendAccount=='sendGrid') {
 						println "Sending via sendGrid"
 						try {
-							EmailQueue.withTransaction {
-								sendGridService.sendMail {
-									from queue.email.from
-									to queue.email.to
-
-
-									subject queue.emai.subject
-									body queue.email.text+"----------------------------------------AAAAAA"
+							sendGridService.sendMail {
+								from "${queue.email.from}"
+								queue.email?.to?.each { t ->
+									println "sending to ${t}"
+									to "${t}"
 								}
 
+								subject queue.email.subject+"-- from sendgrid"
+								body " from sendGrid"
 							}
 						} catch (Exception e) {
-							println "------------------------------------------ E: ${e}"
+							println "SendGrid had error E: ${e}"
+							failed=true
+							code='sendgrid.failed'
 						}
 					} else {
 						println "Returning it back to how plugin was doing things"
@@ -410,38 +403,9 @@ class MyExampleMailingService extends QueueMailBaseService {
 			error=e.message
 		} finally {
 			if (failed) {
-				/**
-				 * If we have an account meaning also mark down those that peaked limit
-				 * make them inactive as well all those that failed to send in a row over failuresTolerated
-				 * configured value
-				 */
-				if (sendAccount) {
-					executor.registerSenderFault(clazz, queue.id, sendAccount)
-				}
-				if (code) {
-					def webRequest = RequestContextHolder.getRequestAttributes()
-					if(!webRequest) {
-						def servletContext  = ServletContextHolder.getServletContext()
-						def applicationContext = WebApplicationContextUtils.getRequiredWebApplicationContext(servletContext)
-						webRequest =  grails.util.GrailsWebMockUtil.bindMockWebRequest(applicationContext)
-					}
-					if (args) {
-						error = g.message(code: code,args:args)
-					} else {
-						error = g.message(code: code)
-					}
-				}
-				if (sendAccount) {
-					//Try again to see if it can be sent
-					logError(queue, error)
-					sendMail(executor,queue,jobConfigurations, clazz)
-				} else {
-					// no options left here
-					errorReport(queue, error)
-				}
+				actionFailed(executor, queue, jobConfigurations, clazz, sendAccount, error, code, args)
 			}
 		}
 	}
 }
-
 ```
