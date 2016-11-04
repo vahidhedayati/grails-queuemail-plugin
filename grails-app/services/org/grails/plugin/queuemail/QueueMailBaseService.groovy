@@ -3,9 +3,12 @@ package org.grails.plugin.queuemail
 import grails.core.GrailsApplication
 import grails.core.support.GrailsApplicationAware
 import grails.util.Holders
+import grails.web.context.ServletContextHolder
 import org.grails.plugin.queuemail.enums.Priority
 import org.grails.plugin.queuemail.enums.QueueStatus
 import org.grails.plugins.web.taglib.ApplicationTagLib
+import org.springframework.web.context.request.RequestContextHolder
+import org.springframework.web.context.support.WebApplicationContextUtils
 
 import java.util.concurrent.RunnableFuture
 import java.util.concurrent.ScheduledThreadPoolExecutor
@@ -26,25 +29,57 @@ abstract class QueueMailBaseService  implements GrailsApplicationAware {
 
 	def sendMail(executor,queue,jobConfigurations,Class clazz) {
 		boolean failed=true
+		String sendAccount
 		String error=''
+		String code
+		List args
 		try {
 			if (jobConfigurations) {
-				String sendAccount = executor.getSenderCount(clazz,jobConfigurations,queue.id)
+				sendAccount = executor.getSenderCount(clazz,jobConfigurations,queue.id)
 				if (sendAccount) {
 					queueMailService.sendEmail(sendAccount,queue)
 					failed=false							
 				} else {
-					error = 'daily limit reached. Review: '+jobConfigurations
+					code='queuemail.dailyLimit.label'
+					args=[jobConfigurations]
 				}
 			} else {
-				error = 'No configuration found'
+				code='queuemail.noConfig.label'
 			}
 		}catch (Exception e) {
 			failed=true
 			error=e.message
 		} finally {
 			if (failed) {
-				errorReport(queue,error)
+				/**
+				 * If we have an account meaning also mark down those that peaked limit
+				 * make them inactive as well all those that failed to send in a row over failuresTolerated
+				 * configured value
+				 */
+				if (sendAccount) {
+					executor.registerSenderFault(clazz, queue.id, sendAccount)
+				}
+				if (code) {
+					def webRequest = RequestContextHolder.getRequestAttributes()
+					if(!webRequest) {
+						def servletContext  = ServletContextHolder.getServletContext()
+						def applicationContext = WebApplicationContextUtils.getRequiredWebApplicationContext(servletContext)
+						webRequest =  grails.util.GrailsWebMockUtil.bindMockWebRequest(applicationContext)
+					}
+					if (args) {
+						error = g.message(code: code,args:args)
+					} else {
+						error = g.message(code: code)
+					}
+				}
+				if (sendAccount) {
+					//Try again to see if it can be sent
+					logError(queue, error)
+					sendMail(executor,queue,jobConfigurations, clazz)
+				} else {
+					// no options left here
+					errorReport(queue, error)
+				}
 			}
 		}
 	}
@@ -133,13 +168,21 @@ abstract class QueueMailBaseService  implements GrailsApplicationAware {
 		return Thread.currentThread().isInterrupted()
 	}
 
-
+	private void logError(EmailQueue queue, String error) {
+		EmailQueue.withNewTransaction {
+			EmailQueue queue2=EmailQueue.get(queue.id)
+			if (queue2 && queue2.status == RUNNING && !threadInterrupted) {
+				queue2.errorLogs(error?.size()>255 ? (error.substring(0,255)) : (error))
+				queue2.save(flush:true)
+			}
+		}
+	}
 	private void errorReport(EmailQueue queue, String error) {
 		EmailQueue.withNewTransaction {
 			EmailQueue queue2=EmailQueue.get(queue.id)
 			if (queue2 && queue2.status == RUNNING && !threadInterrupted) {
 				queue2.status=ERROR
-				queue2.error=(error?.size()>255 ? (error.substring(0,255)) : (error))
+				queue2.errorLogs(error?.size()>255 ? (error.substring(0,255)) : (error))
 				queue2.save(flush:true)
 			}
 		}

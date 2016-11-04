@@ -16,7 +16,7 @@
 			<g:if test="${superUser||instanceList.reportJobs}">
 			<li>
 				<g:if test="${superUser}">
-					<g:checkBox name="hideUsers" value="${search.hideUsers}"/> <g:message code="queuemail.hideOtherUsers.label"/>
+					<g:checkBox name="hideUsers" onChange="reloadPage();" value="${search.hideUsers}"/> <g:message code="queuemail.hideOtherUsers.label"/>
 				</g:if>
 				<g:if test="${instanceList.reportJobs}">
 					<a class="jobButton" id="jobCtrl"><g:message code="queuemail.jobControl.label" args="${[g.message(code:'queuemail.show.label')]}"/></a>

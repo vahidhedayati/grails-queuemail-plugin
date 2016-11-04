@@ -6,6 +6,7 @@ import org.grails.plugin.queuemail.enums.QueueStatus
 import org.grails.plugin.queuemail.helpers.QueueHelper
 import org.grails.plugin.queuemail.monitor.ServiceConfigs
 
+import javax.xml.ws.Service
 import java.util.concurrent.*
 
 class EmailExecutor extends ThreadPoolExecutor {
@@ -42,12 +43,37 @@ class EmailExecutor extends ThreadPoolExecutor {
 	private static int elapsedQueue = Holders.grailsApplication.config.queuemail?.elapsedQueue ?: 300
 	//Or amount of time elapsed in seconds between last failure and now
 	private static int elapsedTime = Holders.grailsApplication.config.queuemail?.elapsedTime ?: 1800 // 30 minutes
-
+	private static int failuresTolerated = Holders.grailsApplication.config.queuemail?.failuresTolerated ?: 5 // 5  failures in a row
 
 	public EmailExecutor() {
 		super(corePoolSize,maximumPoolSize,keepAliveTime,timeoutUnit,
 				new PriorityBlockingQueue<Runnable>(maxQueue,new EmailComparator())
 		)
+	}
+
+	static void registerSenderFault(Class clazz, Long queueId, String sendAccount) {
+		List<ServiceConfigs> serviceConfigs = senderMap.get(clazz)
+		ServiceConfigs serviceConfig =serviceConfigs?.find{it.jobName==sendAccount}
+		if (serviceConfig) {
+			ServiceConfigs serviceConfig1 = serviceConfig.clone()
+			serviceConfig1.failCount=1
+
+			if (serviceConfig.lastFailedQueueId && serviceConfig.lastFailedQueueId + 1 == queueId||serviceConfig.lastFailedQueueId== queueId) {
+				serviceConfig1.failCount=serviceConfig.failCount ? (serviceConfig.failCount+1): 1
+			}
+			if (serviceConfig1.failCount >= failuresTolerated) {
+				serviceConfig1.active=false
+			}
+			serviceConfig1.lastFailedQueueId=queueId
+			serviceConfig1.lastQueueId=queueId
+			serviceConfig1.currentCount=serviceConfig1.currentCount ? (serviceConfig1.currentCount+1) : 1
+			serviceConfig1.failTotal=serviceConfig.failTotal ? (serviceConfig.failTotal+1) : 1
+			serviceConfig1.lastFailed=new Date()
+			serviceConfigs.remove(serviceConfig)
+			serviceConfigs.add(serviceConfig1)
+			senderMap.remove(clazz)
+			senderMap.put(clazz,serviceConfigs)
+		}
 	}
 	/**
 	 * Complex binding of current Class being your serviceClass and its underlying configuration
@@ -69,6 +95,7 @@ class EmailExecutor extends ThreadPoolExecutor {
 		if (serviceConfigs) {
 			jobConfigurations?.each { String sender, int limit ->
 				currentCounter=1
+				failTotal=0
 				lastSendDay=today
 				if (!sendAccount) {
 					ServiceConfigs serviceConfig = serviceConfigs.find { it.jobName == sender }
@@ -87,20 +114,24 @@ class EmailExecutor extends ThreadPoolExecutor {
 								}
 							}
 						} else {
-							if (elapsedQueue && queueId - serviceConfig.lastQueueId > elapsedQueue || elapsedTime && now.time - serviceConfig.lastFailed.time > elapsedTime) {
+							if (elapsedQueue && queueId - serviceConfig.lastQueueId > elapsedQueue ||
+									elapsedTime && serviceConfig.lastFailed &&\
+									  now.time - serviceConfig.lastFailed.time > (elapsedTime*1000)) {
 								sendAccount = sender
 								lastFailed = serviceConfig.lastFailed
-								failTotal = serviceConfig.failTotal + serviceConfig.failCount
+								failTotal = serviceConfig.failTotal
 							}
 						}
 					} else {
-						sendAccount = sender
+						if (serviceConfig.active) {
+							sendAccount = sender
+						}
 					}
 					if (sendAccount) {
 						if (exists) {
 							serviceConfigs?.remove(serviceConfig)
 						}
-						ServiceConfigs serviceConfig1 = new ServiceConfigs()
+						ServiceConfigs serviceConfig1 = serviceConfig.clone()
 						serviceConfig1.lastDay = lastSendDay
 						serviceConfig1.jobName = sendAccount
 						if (lastFailed) {
@@ -114,6 +145,7 @@ class EmailExecutor extends ThreadPoolExecutor {
 						serviceConfig1.currentCount = currentCounter
 						serviceConfig1.limit=limit
 						serviceConfig1.actioned= now
+						serviceConfigs.remove(serviceConfig)
 						serviceConfigs.add(serviceConfig1)
 					}
 				}
@@ -138,6 +170,7 @@ class EmailExecutor extends ThreadPoolExecutor {
 				}
 			}
 		}
+		senderMap?.remove(clazz)
 		senderMap.put(clazz,serviceConfigs)
 		return sendAccount ?: ''
 	}

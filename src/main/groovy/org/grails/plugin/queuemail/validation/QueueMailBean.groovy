@@ -2,8 +2,11 @@ package org.grails.plugin.queuemail.validation
 
 import grails.util.Holders
 import grails.validation.Validateable
-import static org.grails.plugin.queuemail.enums.SearchTypes.*
 import org.grails.plugin.queuemail.EmailQueue
+import org.grails.plugin.queuemail.enums.QueueStatus
+import org.grails.plugin.queuemail.enums.SearchTypes
+
+import static org.grails.plugin.queuemail.enums.SearchTypes.USER
 
 
 class QueueMailBean implements Validateable {
@@ -13,11 +16,11 @@ class QueueMailBean implements Validateable {
 
 	Long userId
 
-	String searchBy
+	SearchTypes searchBy
 	String searchFor
 	Long userSearchId
 	boolean hideUsers=true
-	String status
+	QueueStatus status
 
 	Integer max=Math.min(10, 50)
 	Integer offset

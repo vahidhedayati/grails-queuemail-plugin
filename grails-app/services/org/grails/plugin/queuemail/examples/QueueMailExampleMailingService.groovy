@@ -14,7 +14,7 @@ class QueueMailExampleMailingService extends QueueMailBaseService {
 		 * working it's way down and when limit exceeds it will use the next element
 		 */
 		def jobConfigurations = [
-				'mailConfigExample1': 2,
+				'mailConfigExample1': 3,
 				'mailConfigExample2': 100,
 			]		
 		

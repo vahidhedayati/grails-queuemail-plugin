@@ -121,7 +121,7 @@ class Email {
 	
 	static transients = ['mimeCapable','fileTypeMap','mailMessageContentRenderer', 'html','body']
 	static mapping = {
-		table 'async_mail_mess'
+		//table 'queuemail_email'
 
 		from column: 'from_column'
 
@@ -129,7 +129,7 @@ class Email {
 				indexColumn: 'to_idx',
 				fetch: 'join',
 				joinTable: [
-					name: 'async_mail_to',
+					name: 'mail_to',
 					length: MAX_EMAIL_ADDR_SIZE,
 					key: 'message_id',
 					column: 'to_string'
@@ -140,7 +140,7 @@ class Email {
 				indexColumn: 'cc_idx',
 				fetch: 'join',
 				joinTable: [
-					name: 'async_mail_cc',
+					name: 'mail_cc',
 					length: MAX_EMAIL_ADDR_SIZE,
 					key: 'message_id',
 					column: 'cc_string'
@@ -151,7 +151,7 @@ class Email {
 				indexColumn: 'bcc_idx',
 				fetch: 'join',
 				joinTable: [
-					name: 'async_mail_bcc',
+					name: 'mail_bcc',
 					length: MAX_EMAIL_ADDR_SIZE,
 					key: 'message_id',
 					column: 'bcc_string'
@@ -162,7 +162,7 @@ class Email {
 				indexColumn: [name: 'header_name', length: 255],
 				fetch: 'join',
 				joinTable: [
-					name: 'async_mail_header',
+					name: 'mail_header',
 					key: 'message_id',
 					column: 'header_value'
 				]

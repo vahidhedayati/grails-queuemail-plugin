@@ -37,7 +37,7 @@ class EmailQueueBean  implements Validateable {
 	Priority priority
 	String username
 
-	String error
+	List<String> errorLogs
 	String reportType		// Required only for binding to buildReport request
 
 	QueueStatus status=QUEUED
@@ -57,7 +57,7 @@ class EmailQueueBean  implements Validateable {
 		username(nullable:true)
 		queueType(nullable:true)
 		reportType(nullable:true)
-		error(nullable:true)
+		errorLogs(nullable:true)
 	}
 
 	/*
@@ -66,7 +66,7 @@ class EmailQueueBean  implements Validateable {
 	def formatBean(queue) {
 		id=queue.id
 		emailService=queue.emailService
-		error=queue.error
+		errorLogs=queue.errorLogs
 		email=queue.email
 		userId=queue.userId
 		locale=queue.locale
