@@ -51,39 +51,42 @@ abstract class QueueMailBaseService  implements GrailsApplicationAware {
 			error=e.message
 		} finally {
 			if (failed) {
-				/**
-				 * If we have an account meaning also mark down those that peaked limit
-				 * make them inactive as well all those that failed to send in a row over failuresTolerated
-				 * configured value
-				 */
-				if (sendAccount) {
-					executor.registerSenderFault(clazz, queue.id, sendAccount)
-				}
-				if (code) {
-					def webRequest = RequestContextHolder.getRequestAttributes()
-					if(!webRequest) {
-						def servletContext  = ServletContextHolder.getServletContext()
-						def applicationContext = WebApplicationContextUtils.getRequiredWebApplicationContext(servletContext)
-						webRequest =  grails.util.GrailsWebMockUtil.bindMockWebRequest(applicationContext)
-					}
-					if (args) {
-						error = g.message(code: code,args:args)
-					} else {
-						error = g.message(code: code)
-					}
-				}
-				if (sendAccount) {
-					//Try again to see if it can be sent
-					logError(queue, error)
-					sendMail(executor,queue,jobConfigurations, clazz)
-				} else {
-					// no options left here
-					errorReport(queue, error)
-				}
+				actionFailed(executor, queue, jobConfigurations, clazz, sendAccount, error, code, args)
 			}
 		}
 	}
 
+	void actionFailed(executor,queue,jobConfigurations,clazz,sendAccount,error,code,args) {
+		/**
+		 * If we have an account meaning also mark down those that peaked limit
+		 * make them inactive as well all those that failed to send in a row over failuresTolerated
+		 * configured value
+		 */
+		if (sendAccount) {
+			executor.registerSenderFault(clazz, queue.id, sendAccount)
+		}
+		if (code) {
+			def webRequest = RequestContextHolder.getRequestAttributes()
+			if(!webRequest) {
+				def servletContext  = ServletContextHolder.getServletContext()
+				def applicationContext = WebApplicationContextUtils.getRequiredWebApplicationContext(servletContext)
+				webRequest =  grails.util.GrailsWebMockUtil.bindMockWebRequest(applicationContext)
+			}
+			if (args) {
+				error = g.message(code: code,args:args)
+			} else {
+				error = g.message(code: code)
+			}
+		}
+		if (sendAccount) {
+			//Try again to see if it can be sent
+			logError(queue, error)
+			sendMail(executor,queue,jobConfigurations, clazz)
+		} else {
+			// no options left here
+			errorReport(queue, error)
+		}
+	}
 
 	def executeReport(queue) {
 		boolean validStatus=verifyStatusBeforeStart(queue.id)
