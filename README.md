@@ -379,7 +379,7 @@ class MyExampleMailingService extends QueueMailBaseService {
 								}
 
 								subject queue.email.subject+"-- from sendgrid"
-								body " from sendGrid"
+								body +queue.email.text+" from sendGrid"
 							}
 						} catch (Exception e) {
 							println "SendGrid had error E: ${e}"
