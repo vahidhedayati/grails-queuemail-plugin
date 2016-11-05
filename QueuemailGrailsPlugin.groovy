@@ -12,7 +12,7 @@ centrally controlled and limited to either daily limit or failures exceeding fai
 limit (in a row). By default all email's passing through are priority driven and configured by overall 
 customService name.  Two methods of priority queueing are provided BASIC and ENHANCED (default). 
  Enhanced launches an additional thread for each running task and will attempt to kill any running process 
-considered as stuck (if time taken exceeds `killLongRunningTasks` configuration period). """
+considered as stuck (if time taken exceeds killLongRunningTasks configuration period). """
 	def documentation = "https://github.com/vahidhedayati/grails-queuemail-plugin"
 	def license = "APACHE"
 	def developers = [name: 'Vahid Hedayati', email: 'badvad@gmail.com']
