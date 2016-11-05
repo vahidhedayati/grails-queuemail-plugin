@@ -1,23 +1,24 @@
 Grails QueueMail plugin
 =========================
 
-Queuemail plugin is a centralised email queueing system, provides a `BASIC` and `ENHANCED` mode. difference enhanced has
-and inner thread launched but then attempts to kill stuck inner threads. Emails that arrive are processed through priority
-rules configured by you. You can define how many active concurrent email threads can be running at any one time and how many
-can await in the queue to be served.  Each email is then bound to `emailService` that you create and within it you define
-the `email configuration names` the email can use and what each email configuration's `limit is per day`.
-The queueing system will use the first provided configuration to run from. If this first or top element goes offline or
-was configured incorrectly it will hit a threshold and plugin will mark it down. When either it is marked down due to errors
-or it has reached defined capacity the plugin will then return the next config and work this way.
+Queuemail plugin is a centralised email queueing system. It provides two queueing mechanism's `BASIC` and `ENHANCED (default)`. 
+Enhanced launches an additional thread for each running task and it will attempt to kill the process if it 
+exceeds `killLongRunningTasks` period (it will be considered as stuck).
+  
+Arriving emails are processed through priority rules configured by you. 
+You can define how many active concurrent email threads can be running at any one time and how many
+can wait in the queue to be served.  Each email is then bound to the `emailService` that you create and within it you define
+the `configNames` and `limit`. The configName will then need to be created in your applications Config.groovy/application.groovy
+and essentially contains the SMTP configuration required to connect through and send email's.
 
-If a host is down or not configured correctly the very first email to hit this issue is re-attempted again through it for
-the amount of times `failuresTolerated` is configured for. This sole email will be then mark it as down by re-repeating and
-when it is marked down it will finally be attempted through the next configuration itself. Meaning it won't give up there
-for that email. My tests of 2 failure and a badly configured account ended up in 3 attempts to send 1st email then 1 attempt
-for the email after that through seconday configuration.
+The queueing system will use the first provided configuration for every email requested. If this first element goes offline or
+was configured incorrectly it will hit a threshold and plugin will mark it down. 
 
-
-Whilst making this plugin the issue of TOC violation came up. Please check with your SMTP provider to ensure you are not violating any TOC's whilst attempting to keep within their set limits/boundaries and consequently switching accounts/providers.
+If there is a problem the very email that hits the problem is retried over and over until it reaches 
+ `failuresTolerated` level. At this point the element is marked as down and the email that same email is then sent to next element.
+ All new email's will now be going through second configured element.
+ 
+Whilst making this plugin the issue of `Violating TOC` came up, so please check with your SMTP provider to ensure you are not violating any TOC's whilst attempting to keep within their set limits/boundaries and consequently/possibly having to switch accounts/providers.
 
 # Please use this plugin responsibly
 
@@ -46,7 +47,7 @@ compile ":queuemail:1.0"
 ## Configuration for unreliable SMTP services
 
 Please visit above configuration links and read through the comments provided. At the very bottom it covers
-how to mark down a configuration element if it fails to consecutively send emails.
+host failures and limiting / restricting host failures.
 
 ## Basic service the defines SMTP configurations (that are binded to Config objects and limitations per day)
 ```groovy
@@ -76,7 +77,7 @@ Now with queueMailExample service created, refer to `SampleConfig.groovy` add th
 configuration as shown to match with above names. In the most basic form if you add the following to your
 Config.groovy or application.groovy
 
-## Example configuration for gmail on grails 2 application
+## Example configuration for grails 2
 ```groovy
 
 queuemail {
@@ -118,7 +119,7 @@ queuemail {
 
 
 ## Example configuration for application.groovy on grails 3
-whilst testing gmail all these extra keys were required  (only under grails 3)
+whilst testing gmail  (only under grails 3) all these extra keys were required 
 
 ```groovy
 import org.grails.plugin.queuemail.enums.QueueTypes
@@ -179,8 +180,7 @@ queuemail {
 }
 ```
 
-[Here are some examples](https://github.com/vahidhedayati/grails-queuemail-plugin/blob/master/grails-app/controllers/org/grails/plugin/queuemail/QueueTestController.groovy)
-you now call your service. Please refere to examples for further ways of using the `new Email` method
+[QueueTestController](https://github.com/vahidhedayati/grails-queuemail-plugin/blob/master/grails-app/controllers/org/grails/plugin/queuemail/QueueTestController.groovy) used to show some of the examples below:
 
 ```groovy
 
@@ -219,8 +219,17 @@ you now call your service. Please refere to examples for further ways of using t
 ```
 
 
-`buildEmail` calls `queueMailExample` aka `EXAMPLE_SERVICE` which maps up to QueueMailExampleMailingService and pulls
-in relevant configuration and runs the email through it's queueing system.
+You store an `Email` in it's domain class. Then you call `buildEmail` which
+ 
+`buildEmail(EXAMPLE_SERVICE, userId, locale, message)` 
+```
+EXAMPLE_SERVICE=queueMailExample
+userId=current userId
+locale=current locale/user locale
+message=That email above you just saved
+```
+The `queueMailExample`  maps up to `QueueMailExampleMailingService` that you would create to match your rule 
+name and described above here. 
 
 Queues are limited to defined queue limitations as per configuration.
 Long outstanding jobs should be killed off automatically if ENHANCED method is used. (refer to configuration links)
@@ -277,19 +286,19 @@ A new controller action:
         }
 ```
 
-Now the MyExampleMailingService is enhancements on above [QueueMailExampleService]
-(https://github.com/vahidhedayati/grails-queuemail-plugin/blob/master/grails-app/services/org/grails/plugin/queuemail/examples/QueueMailExampleMailingService.groovy)
+`MyExampleMailingService` enhances or modifies the behaviour of `sendMail` function 
+that resides in `QueueMailBaseService` and is what this service extends from. 
 
-but it also defines `def sendMail(executor,queue,jobConfigurations,Class clazz) {`
-My first configured job is
-In short if you look for  `'sendGrid': 2,`. Then in the sendMail segment `if (sendAccount=='sendGrid') {`.
-When it hits this it will come out of the process the plugin takes and do my new additional work with sendGrid.
-You can obviously make this into a case statement or wrap further if's to do other third party email sending methods.
-It then falls back into else and proceeds with normal plugin stuff. The result is after 2 emails `executor.getSenderCount`
-will no longer return  `sendGrid` and therefore it will hit the else block and carry on to `mailConfigExample2` procssed
-by actual plugin.
 
-## That is all there is to it :)
+My first configured job is `'sendGrid': 2,`.  If you look within `sendMail` segment below you will notice 
+`if (sendAccount=='sendGrid') {`.
+Whilst it is within the limitation of 2 jobs it will the if statement and use `sendGridService.sendMail`. 
+Feel free to add other if statements and expand on the idea to other third party 
+email plugin's or custom mail api's. 
+The final else should be left as it is since it will return only when it hits a job that no longer matches your defined if statements. 
+So in this example `'mailConfigExample2'` will hit the else block after 2 emails was sent via `sendGrid` because
+`executor.getSenderCount` would mark  `sendGrid` down and return `mailConfigExample2` for the next email's. 
+
 
 ```groovy
 
@@ -360,3 +369,5 @@ class MyExampleMailingService extends QueueMailBaseService {
 	}
 }
 ```
+
+## That is all there is to it :)
