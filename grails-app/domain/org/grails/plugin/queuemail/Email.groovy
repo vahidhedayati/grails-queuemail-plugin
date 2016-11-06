@@ -1,7 +1,8 @@
 package org.grails.plugin.queuemail
 
+import grails.core.GrailsApplication
+import grails.core.support.GrailsApplicationAware
 import grails.plugins.mail.GrailsMailException
-import grails.plugins.mail.MailMessageContentRenderer
 import grails.util.Holders
 import org.apache.commons.lang.StringUtils
 import org.grails.io.support.FileSystemResource
@@ -13,16 +14,17 @@ import javax.activation.FileTypeMap
 
 import static org.grails.plugin.queuemail.enums.MessageStatus.CREATED
 
-
 /**
  * Re-using asyncmail plugin 
  * Most of AsynchronousMailMessage.groovy 
  */
 
-class Email {
-	
+class Email implements GrailsApplicationAware {
+	GrailsApplication grailsApplication
+	def configuration
 	private static final int MAX_EMAIL_ADDR_SIZE = 256
-	
+	boolean smtpValidation = configuration?.smtpValidation?:false
+
 	String from
 	String replyTo
 	List<String> to
@@ -42,19 +44,8 @@ class Email {
 	/** Date when message was sent */
 	Date sentDate
 
-	// Send interval
-	Date beginDate = new Date()
-
-
-	/** Mark this message for deletion after it's sent */
-	boolean markDelete = false
-
-	boolean markDeleteAttachments = false
-
 	final boolean mimeCapable
 	private FileTypeMap fileTypeMap
-	final MailMessageContentRenderer mailMessageContentRenderer
-
 
 	static constraints = {
 		def mailboxValidator = { String value ->
@@ -67,7 +58,8 @@ class Email {
 			if (list != null) {
 				list.each { String addr ->
 					if (!Validator.isMailbox(addr)) {
-						errors.rejectValue(propertyName, 'asynchronous.mail.mailbox.invalid')
+
+						errors.rejectValue(propertyName, 'mail.mailbox.invalid')
 						flag = false
 					}
 				}
@@ -86,7 +78,7 @@ class Email {
 
 			boolean hasRecipients = reference.to || reference.cc || reference.bcc
 			if (!hasRecipients) {
-				errors.reject('asynchronous.mail.one.recipient.required')
+				errors.reject('mail.one.recipient.required')
 			}
 			return hasRecipients
 		}
@@ -112,14 +104,20 @@ class Email {
 		text(blank: false)
 		alternative(nullable: true)
 		sentDate(nullable: true)
+		cleanTo(nullable:true)
+		cleanCc(nullable:true)
+		cleanBcc(nullable:true)
 	}
 
 
 	static hasMany = [to: String, cc: String, bcc: String, attachments: EmailAttachment]
 	def html
 	def body
-	
-	static transients = ['mimeCapable','fileTypeMap','mailMessageContentRenderer', 'html','body']
+
+	List<String> cleanTo
+	List<String> cleanCc
+	List<String> cleanBcc
+	static transients = ['mimeCapable','fileTypeMap', 'html','body','cleanTo', 'cleanCc', 'cleanBcc','smtpValidation','configuration','grailsApplication']
 	static mapping = {
 		//table 'queuemail_email'
 
@@ -129,44 +127,44 @@ class Email {
 				indexColumn: 'to_idx',
 				fetch: 'join',
 				joinTable: [
-					name: 'mail_to',
-					length: MAX_EMAIL_ADDR_SIZE,
-					key: 'message_id',
-					column: 'to_string'
+						name: 'mail_to',
+						length: MAX_EMAIL_ADDR_SIZE,
+						key: 'message_id',
+						column: 'to_string'
 				]
-				)
+		)
 
 		cc(
 				indexColumn: 'cc_idx',
 				fetch: 'join',
 				joinTable: [
-					name: 'mail_cc',
-					length: MAX_EMAIL_ADDR_SIZE,
-					key: 'message_id',
-					column: 'cc_string'
+						name: 'mail_cc',
+						length: MAX_EMAIL_ADDR_SIZE,
+						key: 'message_id',
+						column: 'cc_string'
 				]
-				)
+		)
 
 		bcc(
 				indexColumn: 'bcc_idx',
 				fetch: 'join',
 				joinTable: [
-					name: 'mail_bcc',
-					length: MAX_EMAIL_ADDR_SIZE,
-					key: 'message_id',
-					column: 'bcc_string'
+						name: 'mail_bcc',
+						length: MAX_EMAIL_ADDR_SIZE,
+						key: 'message_id',
+						column: 'bcc_string'
 				]
-				)
+		)
 
 		headers(
 				indexColumn: [name: 'header_name', length: 255],
 				fetch: 'join',
 				joinTable: [
-					name: 'mail_header',
-					key: 'message_id',
-					column: 'header_value'
+						name: 'mail_header',
+						key: 'message_id',
+						column: 'header_value'
 				]
-				)
+		)
 
 		text type: 'text'
 
@@ -197,31 +195,34 @@ class Email {
 		this.headers = map
 	}
 
-	// Field "to"
-	void to(CharSequence recipient) {
 
-		Assert.notNull(recipient, "Field to can't be null.")
-		to([recipient])
+	void cleanTo(List<String> recipients) {
+		this.to =validateAndCleanAddrList(recipients)
 	}
 
-	void to(Object[] recipients) {
-		Assert.notNull(recipients, "Field to can't be null.")
-		to(recipients*.toString())
-	}
-	
-	void to(List<? extends CharSequence> recipients) {
-		this.to =validateAndConvertAddrList('to', recipients)
+	void setCleanBcc(List<String>  recipients) {
+		this.bcc = validateAndCleanAddrList(recipients)
 	}
 
-	private List<String> validateAndConvertAddrList(String fieldName, List<? extends CharSequence> recipients) {
-		Assert.notNull(recipients, "Field $fieldName can't be null.")
-		Assert.notEmpty(recipients, "Field $fieldName can't be empty.")
+	void setCleanCc(List<String> recipients) {
+		this.cc = validateAndCleanAddrList(recipients)
+	}
 
+	/**
+	 * isMailboxAndResolves will ensure email address is valid and that the end hostname
+	 * that email resolves to has an MX record bound to it.
+	 * If none of those rules match the email address will not be included in actual To/Cc/Bcc field
+	 * when saving/sending
+	 * @param recipients
+	 * @return
+     */
+	private List<String> validateAndCleanAddrList(List<? extends CharSequence> recipients) {
 		List<String> list = new ArrayList<String>(recipients.size())
 		recipients.each {CharSequence seq ->
 			String addr = seq.toString()
-			assertEmail(addr, fieldName)
-			list.add(addr)
+			if (Validator.isMailboxAndResolves(this.from, addr, this.smtpValidation)) {
+				list.add(addr)
+			}
 		}
 		return list
 	}
@@ -234,67 +235,6 @@ class Email {
 		}
 	}
 
-	// Field "bcc"
-	void bcc(CharSequence val) {
-		Assert.notNull(val, "Field bcc can't be null.")
-		bcc([val])
-	}
-
-	void bcc(Object[] recipients) {
-		Assert.notNull(recipients, "Field bcc can't be null.")
-		bcc(recipients*.toString())
-	}
-
-	void bcc(List<? extends CharSequence> recipients) {
-		this.bcc = validateAndConvertAddrList('bcc', recipients)
-	}
-
-	// Field "cc"
-	void cc(CharSequence val) {
-		Assert.notNull(val, "Field cc can't be null.")
-		cc([val])
-	}
-
-	void cc(Object[] recipients) {
-		Assert.notNull(recipients, "Field cc can't be null.")
-		cc(recipients*.toString())
-	}
-
-	void cc(List<? extends CharSequence> recipients) {
-		this.cc = validateAndConvertAddrList('cc', recipients)
-	}
-
-	// Field "replyTo"
-	void replyTo(CharSequence val) {
-		def addr = val?.toString()
-		assertEmail(addr, 'replyTo')
-		this.replyTo = addr
-	}
-
-	// Field "from"
-	void from(CharSequence sender) {
-		def addr = sender?.toString()
-		assertEmail(addr, 'from')
-		this.from = addr
-	}
-
-	// Field "envelope from"
-	void envelopeFrom(CharSequence envFrom) {
-		def addr = envFrom?.toString()
-		assertEmail(addr, 'envelopeFrom')
-		this.envelopeFrom = envFrom
-	}
-
-	// Field "subject"
-	void title(CharSequence subject1) {
-		subject(subject1)
-	}
-
-	void subject(CharSequence subject) {
-		String string = subject?.toString()
-		Assert.hasText(string, "Field subject can't be null or blank.")
-		this.subject = string
-	}
 
 	void setBody(CharSequence seq) {
 		def string = seq?.toString()
@@ -307,9 +247,9 @@ class Email {
 			this.alternative = string
 		}
 	}
-	
+
 	void setHtml(Map paramsMap) {
-		this.htmlEmail = true		
+		this.htmlEmail = true
 		this.text=(doRender(paramsMap) as String)
 	}
 
@@ -320,17 +260,6 @@ class Email {
 		return Holders.grailsApplication.mainContext.groovyPageRenderer.render(template: params.view, model: params.model)
 	}
 
-	void locale(String localeStr) {
-		Assert.hasText(localeStr, "Locale can't be null or empty.")
-
-		locale(new Locale(localeStr.split('_', 3).toArrayString()))
-	}
-
-	void locale(Locale locale) {
-		Assert.notNull(locale, "Locale can't be null.")
-
-		this.locale = locale
-	}
 
 	// Attachments
 	void attachBytes(String name, String mimeType, byte[] content) {
@@ -342,9 +271,9 @@ class Email {
 		}
 
 		this.addToAttachments(
-			new EmailAttachment(
-				attachmentName: name, mimeType: mimeType, content: content
-			)
+				new EmailAttachment(
+						attachmentName: name, mimeType: mimeType, content: content
+				)
 		)
 	}
 
@@ -386,9 +315,9 @@ class Email {
 		}
 
 		this.addToAttachments(
-			new EmailAttachment(
-				attachmentName: name, mimeType: mimeType, content: content, inline: true
-			)
+				new EmailAttachment(
+						attachmentName: name, mimeType: mimeType, content: content, inline: true
+				)
 		)
 	}
 
@@ -404,7 +333,6 @@ class Email {
 		if (!file.exists()) {
 			throw new FileNotFoundException("Can't use $file as an attachment as it does not exist.")
 		}
-
 		inline(contentId, contentType, new FileSystemResource(file))
 	}
 
@@ -415,5 +343,9 @@ class Email {
 		} finally {
 			stream.close()
 		}
+	}
+
+	void setGrailsApplication(GrailsApplication ga) {
+		configuration = ga.config.queuemail
 	}
 }

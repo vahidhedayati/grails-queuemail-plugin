@@ -10,6 +10,10 @@ import org.grails.plugins.web.taglib.ApplicationTagLib
 import org.springframework.web.context.request.RequestContextHolder
 import org.springframework.web.context.support.WebApplicationContextUtils
 
+import javax.mail.AuthenticationFailedException
+import javax.mail.MessagingException
+import javax.mail.SendFailedException
+import javax.mail.internet.AddressException
 import java.util.concurrent.RunnableFuture
 import java.util.concurrent.ScheduledThreadPoolExecutor
 
@@ -29,16 +33,17 @@ abstract class QueueMailBaseService  implements GrailsApplicationAware {
 
 	def sendMail(executor,queue,jobConfigurations,Class clazz) {
 		boolean failed=true
+		boolean resend
 		String sendAccount
 		String error=''
 		String code
 		List args
 		try {
 			if (jobConfigurations) {
-				sendAccount = executor.getSenderCount(clazz,jobConfigurations,queue.id)
+				sendAccount = executor.getSenderCount(clazz, jobConfigurations, queue.id)
 				if (sendAccount) {
-					queueMailService.sendEmail(sendAccount,queue)
-					failed=false							
+					queueMailService.sendEmail(sendAccount, queue)
+					failed = false
 				} else {
 					code='queuemail.dailyLimit.label'
 					args=[jobConfigurations]
@@ -46,17 +51,42 @@ abstract class QueueMailBaseService  implements GrailsApplicationAware {
 			} else {
 				code='queuemail.noConfig.label'
 			}
-		}catch (Exception e) {
+
+		} catch (AddressException e) {
+			//Incorrect email address
 			failed=true
+			error=e.message
+		} catch (AuthenticationFailedException e) {
+			//Authentication failure
+			failed=true
+			resend=true
+			error=e.message
+		} catch (SendFailedException e) {
+			// message cannot be sent.
+			failed=true
+			error=e.message
+		} catch (MessagingException e) {
+			// Unable to send email
+			failed=true
+			resend=true
+			error=e.message
+		} catch (IOException e) {
+			// Unable to find file to attach
+			failed=true
+			error=e.message
+		} catch (Exception e) {
+			//General all other exceptions
+			failed=true
+			resend=true
 			error=e.message
 		} finally {
 			if (failed) {
-				actionFailed(executor, queue, jobConfigurations, clazz, sendAccount, error, code, args)
+				actionFailed(executor, queue, jobConfigurations, clazz, sendAccount, error, code, args,resend)
 			}
 		}
 	}
 
-	void actionFailed(executor,queue,jobConfigurations,clazz,sendAccount,error,code,args) {
+	void actionFailed(executor,queue,jobConfigurations,Class clazz,String sendAccount,String error,String code,List args,boolean resend) {
 		/**
 		 * If we have an account meaning also mark down those that peaked limit
 		 * make them inactive as well all those that failed to send in a row over failuresTolerated
@@ -78,9 +108,10 @@ abstract class QueueMailBaseService  implements GrailsApplicationAware {
 				error = g.message(code: code)
 			}
 		}
-		if (sendAccount) {
+		if (sendAccount && resend) {
 			//Try again to see if it can be sent
 			logError(queue, error)
+
 			sendMail(executor,queue,jobConfigurations, clazz)
 		} else {
 			// no options left here
