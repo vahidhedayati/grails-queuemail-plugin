@@ -103,10 +103,6 @@ class QueueTestController  {
 		render FAILURE
 	}
 
-	/**
-	 * In order to get your email addresses validated use this method
-	 * @return
-	 */
 	def testListTo() {
 		if (config.exampleFrom && config.exampleTo) {
 			Long userId = queueMailUserService.currentuser
@@ -114,10 +110,36 @@ class QueueTestController  {
 			List
 			Email message = new Email(
 					from: config.exampleFrom,
+					//EITHER TO CC OR BCC
+					to: [config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo],
+					//FOR CC
+					//cc:[config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo],
+					//FOR BCC:
+					//bcc: [config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo],
 					subject: 'Subject',
 					body: "<html>HTML text ${new Date()}</html>"
 			)
-			message.to([config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo])
+			/**
+			 * Above methods will fail to save, if you prefer you can use cleanTo cleanCc or cleanBcc
+			 * same rules as above you must define one.
+			 *
+			 * If this method is used, the bad addresses are silently removed so object will save and
+			 * only those with a good email address with be emailed (the last 2) in this example
+			 *
+			 *
+			 * if you have port 25 open to make outgoing SMTP connections you could try enabling
+			 *
+			 * queuemail.smtpValidation=true
+			 *
+			 * This will attempt to check the email address of the recipient from the first MX bound
+			 * to their email address. If valid then the email address is silently added.
+			 *
+			 * This is a pre-delivery confirmation (Experimental)
+			 */
+
+			//message.cleanTo(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+			//message.cleanBcc(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+			//message.cleanCc(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
 			if (!message.save(flush:true)) {
 				log.error message.errors
 			}
@@ -128,50 +150,32 @@ class QueueTestController  {
 		}
 		render FAILURE
 	}
-	
-	def testListBcc() {
-		if (config.exampleFrom && config.exampleTo) {
-			Long userId= queueMailUserService.currentuser
-			def locale = RequestContextUtils.getLocale(request)
-			List
-			Email message = new Email(from:config.exampleFrom,
-					subject: 'Subject',
-					body:  " <html>HTML text ${new Date()}</html>"
-			)
-			message.bcc([config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo])
-			if (!message.save(flush:true)) {
-				log.error message.errors
-			}
-			def queue = queueMailApiService.buildEmail(EXAMPLE_SERVICE,userId, locale, message)
-			flash.message = g.message(code: 'queuemail.reportQueued.label', args: ['testListBcc', queue?.id])
-			render view:VIEW
-			return
-		}
-		render FAILURE
-	}
-	
-	def testListCc() {
-		if (config.exampleFrom && config.exampleTo) {
-			Long userId= queueMailUserService.currentuser
+
+	def testListTo1() {
+		
+			Long userId = queueMailUserService.currentuser
 			def locale = RequestContextUtils.getLocale(request)
 			List
 			Email message = new Email(
-				from:config.exampleFrom,
-				subject: 'Subject',
-				body:  "<html>HTML text ${new Date()}</html>"
-			)			
-			message.cc([config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo])
+					from: 'vv@gmail.com',
+					//cleanTo: ['aa <aa@aa>','bb','cc','dd <dd@gmail.com>','ee <ee@gmail.com>'],
+					subject: 'Subject',
+					body: "<html>HTML text ${new Date()}</html>"
+			)
+			//message.to([config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo])
+			message.cleanTo(['aa <aa@aa>','bb','cc','dd <badvad@gmail.com>','ee <badvad@gmail.com>'])
 			if (!message.save(flush:true)) {
 				log.error message.errors
 			}
 			def queue = queueMailApiService.buildEmail(EXAMPLE_SERVICE,userId, locale, message)
-			flash.message = g.message(code: 'queuemail.reportQueued.label', args: ['testListCc', queue?.id])
+			flash.message = g.message(code: 'queuemail.reportQueued.label', args: ['testListTo', queue?.id])
 			render view:VIEW
 			return
-		}
+		
 		render FAILURE
 	}
-
+	
+	
 	ConfigObject getConfig() {
 		return grailsApplication.config?.queuemail ?: ''
 	}

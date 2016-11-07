@@ -31,7 +31,10 @@
 						<g:each in="${serviceConfig.info}" var="info">
 							<div class="alert alert-success">
 								<span class="circle"></span>
-								<g:message code="configBreakown.label" args="${[info.jobName,info.limit,info.currentCount,info.failTotal,info.failCount,info.actioned]}"/>
+								<g:message code="configBreakown.label" args="${[info.jobName,info.limit,
+																				info.currentCount,info.failTotal,
+																				info.failCount,info.actioned,
+																				info.active,info.currentException?:'']}"/>
 							</div>
 						</g:each>
 						</div>

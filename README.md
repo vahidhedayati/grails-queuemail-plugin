@@ -15,7 +15,7 @@ was configured incorrectly it will hit a threshold and plugin will mark configur
 
 If an email send attempt fails the sole email is re-attempted until it reaches 
  `failuresTolerated` level. Once this happens current `configName` is marked as `inactive` and the next `configName` is attempted to deliver this email. 
- All new email's will now be going through second `configName`. The `configName` that was made `inactive` will automatically re-join active pool after either setPeriod of time or amount of queueId's passing through. Please refer to notes/configuration examples further below.
+ All new email's will now be going through second `configName`. The `configName` that was made `inactive` will automatically re-join active pool after either setPeriod of time or amount of queueId's passing through. Please refer to notes/configuration and specific segment on message exceptions below.
  
 Please check with your SMTP provider to ensure you are not violating any TOC's whilst attempting to keep within their set limits/boundaries and consequently/possibly having to switch accounts/providers.
 
@@ -25,7 +25,7 @@ Please check with your SMTP provider to ensure you are not violating any TOC's w
 
 ### Grails 3: [source](https://github.com/vahidhedayati/grails-queuemail-plugin/) [configuration](https://github.com/vahidhedayati/grails-queuemail-plugin/tree/master/grails-app/conf/SampleConfig.groovy)
 ```groovy
-compile "org.grails.plugins:queuemail:1.2"
+compile "org.grails.plugins:queuemail:1.3"
 ```
 
 
@@ -194,6 +194,47 @@ queuemail {
 			}
 			def queue = queueMailApiService.buildEmail('queueMailExample', userId, locale, message)
 
+			//To Many recipients:
+			Long userId = queueMailUserService.currentuser
+            def locale = RequestContextUtils.getLocale(request)
+            List
+            Email message = new Email(
+                    from: config.exampleFrom,
+                    //EITHER TO CC OR BCC
+                    to: [config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo],
+                    //FOR CC
+                    //cc:[config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo],
+                    //FOR BCC:
+                    //bcc: [config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo],
+                    subject: 'Subject',
+                    body: "<html>HTML text ${new Date()}</html>"
+            )
+            /**
+             * Above methods will fail to save, if you prefer you can use cleanTo cleanCc or cleanBcc
+             * same rules as above you must define one.
+             *
+             * If this method is used, the bad addresses are silently removed so object will save and
+             * only those with a good email address with be emailed (the last 2) in this example
+             *
+             *
+             * if you have port 25 open to make outgoing SMTP connections you could try enabling
+             *
+             * queuemail.smtpValidation=true
+             *
+             * This will attempt to check the email address of the recipient from the first MX bound
+             * to their email address. If valid then the email address is silently added.
+             *
+             * This is a pre-delivery confirmation (Experimental)
+             */
+
+            //message.cleanTo(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+            //message.cleanBcc(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+            //message.cleanCc(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+            if (!message.save(flush:true)) {
+                log.error message.errors
+            }
+            def queue = queueMailApiService.buildEmail(EXAMPLE_SERVICE,userId, locale, message)
+
 ```
 
 
@@ -229,6 +270,16 @@ The plugin also provides  `queueMail/listQueue`  controller / action that gives 
 email's are being processed. It provides detailed information as to each emailService triggered and their underlying
 configuration status/health.
 
+
+## Message errors / Exceptions and configuration activation
+1.3 introduced `enums.MessageExceptions` and `monitor.ServiceConfigs`. 
+SMTP providers that trigger an exception depending on exception type can trigger actual provider(itself)
+to become inactive. The most obvious example used is when there is an authentication failure. There is no point
+in giving this provider a 2nd chance to join the pool since it is obviously incorrectly configured. 
+An override feature has been added to the web interface which provides you with option to change a specific configuration limit, active status and MessageException status.
+If it has failed and you wish to re-activate it - you should remove Message Exception and set active to true. 
+These are dynamic values that are over-written upon application restart.
+ 
 
 ## Configuring sendgrid or other API's/mail plugins to work with queuemail plugin
 Please note this is an example tested and working, whilst this covers sendGrid, this theory could be expanded 
@@ -284,6 +335,7 @@ So in this example `'mailConfigExample2'` will hit the else block after 2 email'
 
 import org.grails.plugin.queuemail.EmailQueue
 import org.grails.plugin.queuemail.QueueMailBaseService
+import org.grails.plugin.queuemail.enums.MessageExceptions
 
 class MyExampleMailingService extends QueueMailBaseService {
 
@@ -298,55 +350,63 @@ class MyExampleMailingService extends QueueMailBaseService {
 		sendMail(executor,queue,jobConfigurations,MyExampleMailingService.class)
 	}
 	
-	def sendMail(executor,queue,jobConfigurations,Class clazz) {
-		boolean failed=true
-		String sendAccount
-		String error=''
-		String code
-		List args
-		try {
-			if (jobConfigurations) {
-				sendAccount = executor.getSenderCount(clazz,jobConfigurations,queue.id)
-				if (sendAccount) {
-					//This bit has change from what is in QueueMailBaseService
-					if (sendAccount=='sendGrid') {
-						println "Sending via sendGrid"
-						try {
-							sendGridService.sendMail {
-								from "${queue.email.from}"
-								queue.email?.to?.each { t ->
-									to "${t}"
-								}
-
-								subject queue.email.subject
-								body queue.email.text+" from sendGrid"
-							}
-						} catch (Exception e) {
-							println "SendGrid had error E: ${e}"
-							failed=true
-							code='sendgrid.failed'
-						}
-					} else {
-						println "Returning it back to how plugin was doing things"
-						queueMailService.sendEmail(sendAccount,queue)
-					}
-					failed=false
-				} else {
-					code='queuemail.dailyLimit.label'
-					args=[jobConfigurations]
-				}
-			} else {
-				code='queuemail.noConfig.label'
-			}
-		}catch (Exception e) {
-			failed=true
-			error=e.message
-		} finally {
-			if (failed) {
-				actionFailed(executor, queue, jobConfigurations, clazz, sendAccount, error, code, args)
-			}
-		}
-	}
+	@Override
+    def sendMail(executor,queue,jobConfigurations,Class clazz,MessageExceptions currentException=null) {
+   		boolean failed=true
+   		boolean resend=false
+   		String sendAccount
+   		String error=''
+   		String code
+   		List args
+   		try {
+   			if (jobConfigurations) {
+   				sendAccount = executor.getSenderCount(clazz, jobConfigurations, queue.id,currentException)
+   				if (sendAccount) {
+   					if (sendAccount=='sendGrid') {
+   						println "Sending via sendGrid"
+   						try {
+   							sendGridService.sendMail {
+   								from "${queue.email.from}"
+   								queue.email?.to?.each { t ->
+   									println "sending to ${t}"
+   									to "${t}"
+   								}
+   								subject queue.email.subject+"-- from sendgrid"
+   								body " from sendGrid"
+   							}
+   						} catch (Exception e) {
+   							println "SendGrid had error E: ${e}"
+   							failed=true
+   							code='sendgrid.failed'
+   						}
+   					} else {
+   						println "Returning it back to how plugin was doing things"
+   						queueMailService.sendEmail(sendAccount,queue)
+   						failed=false
+   					}
+   				} else {
+   					code = 'queuemail.dailyLimit.label'
+   					args = [jobConfigurations]
+   				}
+   			} else {
+   				code = 'queuemail.noConfig.label'
+   			}
+   		}catch (e) {
+   			failed=true
+   			String currentError = e.getClass().simpleName
+   			if (MessageExceptions.values().any{it.toString() == currentError}) {
+   				currentException=currentError
+   				def errors = MessageExceptions.verifyStatus(currentException)
+   				if (errors) {
+   					resend=errors.resend
+   				}
+   			}
+   		} finally {
+   			if (failed) {
+   				actionFailed(executor, queue, jobConfigurations, clazz, sendAccount, error, code, args,resend,currentException)
+   			}
+   		}
+   	}
 }
 ```
 

@@ -9,6 +9,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 
 import org.codehaus.groovy.grails.plugins.web.taglib.ApplicationTagLib
 import org.codehaus.groovy.grails.web.context.ServletContextHolder
+import org.grails.plugin.queuemail.enums.MessageExceptions
 import org.grails.plugin.queuemail.enums.Priority
 import org.grails.plugin.queuemail.enums.QueueStatus
 import org.springframework.web.context.request.RequestContextHolder
@@ -28,50 +29,59 @@ abstract class QueueMailBaseService  {
 
 	abstract def configureMail(executor, EmailQueue queue)
 
-	def sendMail(executor,queue,jobConfigurations,Class clazz) {
+	def sendMail(executor,queue,jobConfigurations,Class clazz,MessageExceptions currentException=null) {
 		boolean failed=true
+		boolean resend=false
 		String sendAccount
 		String error=''
 		String code
 		List args
 		try {
 			if (jobConfigurations) {
-				sendAccount = executor.getSenderCount(clazz,jobConfigurations,queue.id)
+				sendAccount = executor.getSenderCount(clazz, jobConfigurations, queue.id,currentException)
 				if (sendAccount) {
-					queueMailService.send(sendAccount,queue)
-					failed=false							
+					queueMailService.send(sendAccount, queue)
+					failed = false
 				} else {
-					code='queuemail.dailyLimit.label'
-					args=[jobConfigurations]
+					code = 'queuemail.dailyLimit.label'
+					args = [jobConfigurations]
 				}
 			} else {
-				code='queuemail.noConfig.label'
+				code = 'queuemail.noConfig.label'
 			}
-		}catch (Exception e) {
+		}catch (e) {
 			failed=true
-			error=e.message
+			String currentError = e.getClass().simpleName
+			if (MessageExceptions.values().any{it.toString() == currentError}) {
+				currentException=currentError
+				def errors = MessageExceptions.verifyStatus(currentException)
+				if (errors) {
+					resend=errors.resend
+				}
+			}
 		} finally {
 			if (failed) {
-				actionFailed(executor, queue, jobConfigurations, clazz, sendAccount, error, code, args)
+				actionFailed(executor, queue, jobConfigurations, clazz, sendAccount, error, code, args,resend,currentException)
 			}
 		}
 	}
 
-	void actionFailed(executor,queue,jobConfigurations,clazz,sendAccount,error,code,args) {
+	void actionFailed(executor,queue,jobConfigurations,Class clazz,String sendAccount,String error,String code,List args,
+					  boolean resend,MessageExceptions currentException=null) {
 		/**
 		 * If we have an account meaning also mark down those that peaked limit
 		 * make them inactive as well all those that failed to send in a row over failuresTolerated
 		 * configured value
 		 */
 		if (sendAccount) {
-			executor.registerSenderFault(clazz, queue.id, sendAccount)
+			executor.registerSenderFault(clazz, queue.id, sendAccount,currentException)
 		}
 		if (code) {
 			def webRequest = RequestContextHolder.getRequestAttributes()
 			if(!webRequest) {
 				def servletContext  = ServletContextHolder.getServletContext()
 				def applicationContext = WebApplicationContextUtils.getRequiredWebApplicationContext(servletContext)
-				webRequest = grails.util.GrailsWebUtil.bindMockWebRequest(applicationContext)
+				webRequest =  grails.util.GrailsWebMockUtil.bindMockWebRequest(applicationContext)
 			}
 			if (args) {
 				error = g.message(code: code,args:args)
@@ -79,7 +89,7 @@ abstract class QueueMailBaseService  {
 				error = g.message(code: code)
 			}
 		}
-		if (sendAccount) {
+		if (sendAccount && resend) {
 			//Try again to see if it can be sent
 			logError(queue, error)
 			sendMail(executor,queue,jobConfigurations, clazz)

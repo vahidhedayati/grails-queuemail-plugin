@@ -9,7 +9,8 @@ public enum ConfigTypes {
 	CHECKQUEUE('CQ'),
 	STOPEXECUTOR('ST'),
 	DEFAULTCOMPARATOR('DC'),
-	MAXQUEUE('MQ')
+	MAXQUEUE('MQ'),
+	SERVICECONFIGS('SC')
 	
 	String value
 		

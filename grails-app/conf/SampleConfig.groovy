@@ -1,9 +1,7 @@
 import org.grails.plugin.queuemail.enums.QueueTypes
 
 queuemail {
-	exampleFrom="usera <usera@gmail.com>"
-	exampleTo="usera <usera@gmail.com>"
-
+	
 	//standardRunnable = true
 	emailPriorities = [
 					defaultExample:org.grails.plugin.queuemail.enums.Priority.REALLYSLOW
@@ -14,38 +12,46 @@ queuemail {
 	// The configuration for DefaultExampleMailingService has set this to be 2 emails
 	// Meaning after 2 it will fall over to 2nd Configuration
 
+	exampleFrom="usera <userA@gmail.com>"
+	exampleTo="userA_ReplyTo <userA@gmail.com>"
+
 	mailConfigExample1 {
 		host = "smtp.gmail.com"
-		port = 465
-		username = "USERA@gmail.com"
-		password = "PASSWORDA"
+		port = 587
+		username = "userA@gmail.com"
+		password = 'PASSWORD'
 		props = ["mail.debug":"true",
-			  "mail.smtp.auth":"true",
-			"mail.smtp.socketFactory.port":"465",
-			"mail.smtp.socketFactory.class":"javax.net.ssl.SSLSocketFactory",
-			"mail.smtp.socketFactory.fallback":"false"]
+				 "mail.smtp.user":"userA@gmail.com",
+				 "mail.smtp.host": "smtp.gmail.com",
+				 "mail.smtp.port": "587",
+				 "mail.smtp.auth": "true",
+				 "mail.smtp.starttls.enable":"true",
+				 "mail.smtp.EnableSSL.enable":"true",
+				 "mail.smtp.socketFactory.class":"javax.net.ssl.SSLSocketFactory",
+				 "mail.smtp.socketFactory.fallback":"false",
+				 "mail.smtp.socketFactory.port":"465"
+		]
 	}
-	mailConfigExample1.fromAddress="USERA@gmail.com"
-	
-	// In our example we only have 2 examples both set to 2 emails.
-	// After 4 emails all jobs bound to defaultExampleMailingService will not be
-	// sent instead status changed to error in the queue list
-	// In effect setting a daily cap per account
-	// The caps are checked over a daily basis whilst app is running
-	// so if app is running for 2 days on 2nd day caps are reset
+	mailConfigExample1.fromAddress="USERAAA <userA@gmail.com>"
+
 	mailConfigExample2 {
-		
-	  host = "smtp.gmail.com"
-	  port = 465
-	  username = "USERB@gmail.com"
-	  password = "PASSWORDB"
-	  props = ["mail.debug":"true",
-			  "mail.smtp.auth":"true",
-			"mail.smtp.socketFactory.port":"465",
-			"mail.smtp.socketFactory.class":"javax.net.ssl.SSLSocketFactory",
-			"mail.smtp.socketFactory.fallback":"false"]
+		host = "smtp.gmail.com"
+		port =587
+		username = "userB@gmail.com"
+		password = 'PASSWORD'
+		props = ["mail.debug":"true",
+				 "mail.smtp.user":"userB@gmail.com",
+				 "mail.smtp.host": "smtp.gmail.com",
+				 "mail.smtp.port": "587",
+				 "mail.smtp.auth": "true",
+				 "mail.smtp.starttls.enable":"true",
+				 "mail.smtp.EnableSSL.enable":"true",
+				 "mail.smtp.socketFactory.class":"javax.net.ssl.SSLSocketFactory",
+				 "mail.smtp.socketFactory.fallback":"false",
+				 "mail.smtp.socketFactory.port":"465"
+		]
 	}
-	mailConfigExample2.fromAddress="USERB@gmail.com"
+	mailConfigExample2.fromAddress="userBB<userB@gmail.com>"
 	
 	/*
 	 * keepAliveTime in seconds
@@ -152,7 +158,7 @@ queuemail {
 	 * If you no longer wish to show report priority on report screen switch this to true 
 	 */
 	hideQueuePriority=false
-	
+
 	/**
 	 * -----------------------------------------------------
 	 * Configuration for unreliable smtp services
@@ -189,5 +195,30 @@ queuemail {
 	 * like above it will smtp config back into pool
 	 */
 	elapsedTime =  1800 // 30 minutes
+
+
+	/**
+	 * smtpValidation =  pre-delivery confirmation (Experimental) true/false by default false
+	 *
+	 * You should only use this option if you have access to the internet on port 25.
+	 *
+	 * Most home broadband connections reject direct port 25 connections to the outside world
+	 *
+	 * If set to true you must also use either of these methods over to/cc/bcc : (refer to QueueTestController)
+	 *
+	 //message.cleanTo(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+	 //message.cleanBcc(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+	 //message.cleanCc(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+
+
+	 * This will attempt to check the email address of the recipient from the first MX bound
+	 * to their email address. If valid then the email address is silently added.
+	 *
+	 * Forward checking if recipient email will accept email from you and not far from delivery confirmation
+	 *
+	 */
+	smtpValidation=false
+
+
 }
 

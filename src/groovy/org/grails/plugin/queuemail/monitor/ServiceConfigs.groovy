@@ -1,5 +1,7 @@
 package org.grails.plugin.queuemail.monitor
 
+import org.grails.plugin.queuemail.enums.MessageExceptions
+
 /**
  * Created by Vahid Hedayati on 03/11/16.
  */
@@ -20,7 +22,9 @@ class ServiceConfigs implements Cloneable {
     Long lastQueueId
     Long lastFailedQueueId
     Date lastFailed
-
+	
+	MessageExceptions currentException
+	
     Map getResults() {
         Map results=[:]
         results.jobName=jobName
@@ -34,6 +38,7 @@ class ServiceConfigs implements Cloneable {
         results.lastQueueId=lastQueueId
         results.lastQueueId=lastFailedQueueId
         results.lastFailed=lastFailed
+		MessageExceptions currentException
         return results
     }
 

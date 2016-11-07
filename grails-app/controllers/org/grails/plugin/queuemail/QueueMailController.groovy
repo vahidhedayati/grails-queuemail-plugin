@@ -2,8 +2,10 @@ package org.grails.plugin.queuemail
 
 import static org.grails.plugin.queuemail.enums.QueueTypes.*
 
+import org.grails.plugin.queuemail.enums.QueueTypes
 import org.grails.plugin.queuemail.validation.ChangeConfigBean
 import org.grails.plugin.queuemail.validation.ChangePriorityBean
+import org.grails.plugin.queuemail.validation.ChangeServiceConfigBean
 import org.grails.plugin.queuemail.validation.EmailQueueBean
 import org.grails.plugin.queuemail.validation.QueueMailBean
 import org.grails.plugin.queuemail.validation.QueueMailLists
@@ -35,6 +37,7 @@ class QueueMailController {
 	def queueMailApiService
 	def queueMailUserService
 	def emailExecutor
+	def basicExecutor
 
 	/**
 	 * Display a given report Queue record
@@ -202,5 +205,43 @@ class QueueMailController {
 		}
 		response.status=response.SC_CONFLICT
 	}
-	
+	def changeServiceConfig(ChangeServiceConfigBean bean) {
+		if (queueMailUserService.isSuperUser(queueMailUserService.currentuser) && request.xhr) {
+			bean=formatServiceConfigBean(bean)
+			render template:bean.template,model:[instance: bean]
+			return
+		}
+		render status:response.SC_NOT_FOUND
+		return
+	}
+	protected ChangeServiceConfigBean formatServiceConfigBean(ChangeServiceConfigBean bean) {
+		if (bean.queueType) {
+			def executor = emailExecutor
+			if (bean.queueType==QueueTypes.BASIC) {
+				executor = basicExecutor
+			}
+			bean.classes = queueMailApiService.listServiceClasses(executor)
+			if (bean.serviceClazz) {
+				bean.serviceConfigs = queueMailApiService.listServiceConfigurations(executor,bean.serviceClazz)
+				bean.template = '/queueMail/changeServiceConfigListing'
+			} else {
+				bean.template = '/queueMail/changeServiceConfigTop'
+			}
+		}
+		return bean
+	}
+	def modifyServiceConfig(ChangeServiceConfigBean bean) {
+		if (queueMailUserService.isSuperUser(queueMailUserService.currentuser) && request.xhr) {
+			def executor = emailExecutor
+			if (bean.queueType==QueueTypes.BASIC) {
+				executor = basicExecutor
+			}
+			queueMailApiService.modifyJob(executor,bean.serviceClazz,bean.jobName,bean.limit,bean.active,bean.currentException)
+			bean=formatServiceConfigBean(bean)
+			render template:bean.template,model:[instance: bean]
+			return
+		}
+		render status:response.SC_NOT_FOUND
+		return
+	}
 }
