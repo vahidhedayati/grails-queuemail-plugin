@@ -150,31 +150,6 @@ class QueueTestController  {
 		}
 		render FAILURE
 	}
-
-	def testListTo1() {
-		
-			Long userId = queueMailUserService.currentuser
-			def locale = RequestContextUtils.getLocale(request)
-			List
-			Email message = new Email(
-					from: 'vv@gmail.com',
-					//cleanTo: ['aa <aa@aa>','bb','cc','dd <dd@gmail.com>','ee <ee@gmail.com>'],
-					subject: 'Subject',
-					body: "<html>HTML text ${new Date()}</html>"
-			)
-			//message.to([config.exampleTo, config.exampleTo, config.exampleTo, config.exampleTo])
-			message.cleanTo(['aa <aa@aa>','bb','cc','dd <badvad@gmail.com>','ee <badvad@gmail.com>'])
-			if (!message.save(flush:true)) {
-				log.error message.errors
-			}
-			def queue = queueMailApiService.buildEmail(EXAMPLE_SERVICE,userId, locale, message)
-			flash.message = g.message(code: 'queuemail.reportQueued.label', args: ['testListTo', queue?.id])
-			render view:VIEW
-			return
-		
-		render FAILURE
-	}
-	
 	
 	ConfigObject getConfig() {
 		return grailsApplication.config?.queuemail ?: ''
