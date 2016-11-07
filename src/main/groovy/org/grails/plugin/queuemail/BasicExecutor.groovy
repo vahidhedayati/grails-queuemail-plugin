@@ -1,6 +1,7 @@
 package org.grails.plugin.queuemail
 
 import grails.util.Holders
+import org.grails.plugin.queuemail.enums.MessageExceptions
 import org.grails.plugin.queuemail.enums.Priority
 import org.grails.plugin.queuemail.helpers.QueueHelper
 import org.grails.plugin.queuemail.monitor.ServiceConfigs
@@ -44,23 +45,25 @@ class BasicExecutor extends ThreadPoolExecutor {
 			new PriorityBlockingQueue<Runnable>(maxQueue,new EmailComparator()) 
 		)
 	}
-
-	static void registerSenderFault(Class clazz, Long queueId, String sendAccount) {
+	static void registerSenderFault(Class clazz, Long queueId, String sendAccount, MessageExceptions currentException=null) {
 		List<ServiceConfigs> serviceConfigs = senderMap.get(clazz)
 		ServiceConfigs serviceConfig =serviceConfigs?.find{it.jobName==sendAccount}
 		if (serviceConfig) {
 			ServiceConfigs serviceConfig1 = serviceConfig.clone()
 			serviceConfig1.failCount=1
-
 			if (serviceConfig.lastFailedQueueId && serviceConfig.lastFailedQueueId + 1 == queueId||serviceConfig.lastFailedQueueId== queueId) {
 				serviceConfig1.failCount=serviceConfig.failCount ? (serviceConfig.failCount+1): 1
 			}
 			if (serviceConfig1.failCount >= failuresTolerated) {
 				serviceConfig1.active=false
+			} else {
+				if (currentException) {
+					serviceConfig1.currentException = currentException
+					serviceConfig1.active = MessageExceptions.defineActive(currentException)
+				}
 			}
 			serviceConfig1.lastFailedQueueId=queueId
 			serviceConfig1.lastQueueId=queueId
-			serviceConfig1.currentCount=serviceConfig1.currentCount ? (serviceConfig1.currentCount+1) : 1
 			serviceConfig1.failTotal=serviceConfig.failTotal ? (serviceConfig.failTotal+1) : 1
 			serviceConfig1.lastFailed=new Date()
 			serviceConfigs.remove(serviceConfig)
@@ -77,25 +80,23 @@ class BasicExecutor extends ThreadPoolExecutor {
 	 * @param queueId
 	 * @return
 	 */
-	static String getSenderCount(Class clazz, jobConfigurations,Long queueId) {
+	static String getSenderCount(Class clazz, jobConfigurations, Long queueId,MessageExceptions currentException=null) {
 		String sendAccount
 		boolean exists
 		List<ServiceConfigs> serviceConfigs = senderMap.get(clazz)
 		Date now = new Date()
 		Date lastFailed
 		int today = now.format('dd') as int
-		int lastSendDay,currentCounter,failTotal
-
+		int lastSendDay,currentCounter
 		if (serviceConfigs) {
 			jobConfigurations?.each { String sender, int limit ->
 				currentCounter=1
-				failTotal=0
 				lastSendDay=today
 				if (!sendAccount) {
 					ServiceConfigs serviceConfig = serviceConfigs.find { it.jobName == sender }
 					now = new Date()
-					if (serviceConfig && serviceConfig.currentCount) {
-						if (serviceConfig.active) {
+					if (serviceConfig.active) {
+						if (serviceConfig) {
 							exists = true
 							if (serviceConfig.currentCount + 1 <= limit) {
 								if (today == serviceConfig.lastDay) {
@@ -107,17 +108,12 @@ class BasicExecutor extends ThreadPoolExecutor {
 									sendAccount = sender
 								}
 							}
-						} else {
-							if (elapsedQueue && queueId - serviceConfig.lastQueueId > elapsedQueue ||
-									elapsedTime && serviceConfig.lastFailed &&\
-									  now.time - serviceConfig.lastFailed.time > (elapsedTime*1000)) {
-								sendAccount = sender
-								lastFailed = serviceConfig.lastFailed
-								failTotal = serviceConfig.failTotal
-							}
 						}
 					} else {
-						if (serviceConfig.active) {
+						if ((!currentException||currentException && MessageExceptions.defineActive(currentException)) &&\
+						  (elapsedQueue && queueId - serviceConfig.lastQueueId > elapsedQueue ||
+								elapsedTime && serviceConfig.lastFailed &&\
+										  now.time - serviceConfig.lastFailed.time > (elapsedTime*1000))) {
 							sendAccount = sender
 						}
 					}
@@ -128,13 +124,6 @@ class BasicExecutor extends ThreadPoolExecutor {
 						ServiceConfigs serviceConfig1 = serviceConfig.clone()
 						serviceConfig1.lastDay = lastSendDay
 						serviceConfig1.jobName = sendAccount
-						if (lastFailed) {
-							serviceConfig1.lastFailed = lastFailed
-						}
-						if (failTotal) {
-							serviceConfig1.failTotal = failTotal
-						}
-						serviceConfig1.active = true
 						serviceConfig1.lastQueueId = queueId
 						serviceConfig1.currentCount = currentCounter
 						serviceConfig1.limit=limit

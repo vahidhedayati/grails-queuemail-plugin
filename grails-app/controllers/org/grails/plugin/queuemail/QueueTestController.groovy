@@ -126,7 +126,7 @@ class QueueTestController implements GrailsApplicationAware {
 			 *
 			 * queuemail.smtpValidation=true
 			 *
-			 * This will attempt to check the email address of the recipient from the last MX bound
+			 * This will attempt to check the email address of the recipient from the first MX bound
 			 * to their email address. If valid then the email address is silently added.
 			 *
 			 * This is a pre-delivery confirmation (Experimental)

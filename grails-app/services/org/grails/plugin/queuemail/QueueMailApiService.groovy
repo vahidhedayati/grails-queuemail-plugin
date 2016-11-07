@@ -4,6 +4,7 @@ import grails.core.GrailsApplication
 import grails.core.support.GrailsApplicationAware
 import groovy.time.TimeCategory
 import groovy.time.TimeDuration
+import org.grails.plugin.queuemail.enums.MessageExceptions
 import org.grails.plugin.queuemail.enums.Priority
 import org.grails.plugin.queuemail.helpers.QueueHelper
 import org.grails.plugin.queuemail.monitor.ServiceConfigs
@@ -511,15 +512,53 @@ class QueueMailApiService implements GrailsApplicationAware {
 			running:running,queued:queued,minPreserve:minPreserve,priority:priority,executorCount:executorCount]
 	}
 
+	void modifyJob(executor, String serviceClazz, String jobName,int limit,boolean active,MessageExceptions currentException=null) {
+		def configCheck  = executor.senderMap?.find{it.key.simpleName.toString()==serviceClazz}
+		Class currentClazz = configCheck?.key
+		List<ServiceConfigs> serviceConfigs = configCheck?.value
+		ServiceConfigs serviceConfig=serviceConfigs?.find{it.jobName==jobName}
+		if (serviceConfig) {
+			ServiceConfigs serviceConfig1 = serviceConfig.clone()
+			if (!currentException) {
+				serviceConfig1.currentException=null
+			} else {
+				serviceConfig1.currentException=currentException
+			}
+			serviceConfig1.limit=limit
+			serviceConfig1.active=active
+			serviceConfigs.remove(serviceConfig)
+			serviceConfigs.add(serviceConfig1)
+			executor.senderMap?.remove(currentClazz)
+			executor.senderMap?.put(currentClazz,serviceConfigs)
+		}
+	}
+
+	List listServiceClasses(executor) {
+		return executor.senderMap*.key.collect{it.simpleName}
+	}
+
+	List listServiceConfigurations(executor, String clazzName) {
+		List<ServiceConfigs> serviceConfigs = executor.senderMap?.find{it.key.simpleName.toString()==clazzName}.value
+		List results=[]
+		Map result = [:]
+		result.service=clazzName
+		result.info=[]
+		serviceConfigs?.each { ServiceConfigs serviceConfig ->
+			result.info << serviceConfig.getResults()
+		}
+		results << result
+		return results
+	}
+
 	List listServiceConfigurations(executor) {
 		List results=[]
 		executor.senderMap?.each { Class clazz, List<ServiceConfigs> serviceConfigs ->
-				Map result = [:]
-				result.service=clazz.simpleName
-				result.info=[]
-			    serviceConfigs?.each { ServiceConfigs serviceConfig ->
-					result.info << serviceConfig.getResults()
-				}
+			Map result = [:]
+			result.service=clazz.simpleName
+			result.info=[]
+			serviceConfigs?.each { ServiceConfigs serviceConfig ->
+				result.info << serviceConfig.getResults()
+			}
 			results << result
 		}
 		return results

@@ -15,7 +15,7 @@ import org.grails.plugin.queuemail.enums.QueueTypes
  */
 @CompileStatic
 class QueueMailLists {
-    static final List CHANGE_TYPES=[POOL,MAXQUEUE,PRESERVE,DEFAULTCOMPARATOR,CHECKQUEUE,STOPEXECUTOR]
+    static final List CHANGE_TYPES=[POOL,MAXQUEUE,PRESERVE,DEFAULTCOMPARATOR,CHECKQUEUE,STOPEXECUTOR,SERVICECONFIGS]
     static final String DELALL='AL'
     static final def deleteList = EmailQueue.REPORT_STATUS_ALL-[DELETED, RUNNING,ACTIVE]+[DELALL]	
     static final List SEARCH_TYPES=[USER,FROM,TO,SUBJECT]

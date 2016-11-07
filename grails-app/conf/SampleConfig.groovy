@@ -197,5 +197,28 @@ queuemail {
 	elapsedTime =  1800 // 30 minutes
 
 
+	/**
+	 * smtpValidation =  pre-delivery confirmation (Experimental) true/false by default false
+	 *
+	 * You should only use this option if you have access to the internet on port 25.
+	 *
+	 * Most home broadband connections reject direct port 25 connections to the outside world
+	 *
+	 * If set to true you must also use either of these methods over to/cc/bcc : (refer to QueueTestController)
+	 *
+	 //message.cleanTo(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+	 //message.cleanBcc(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+	 //message.cleanCc(['aa <aa@aa>','bb','cc','dd <dd@example.com>','ee <ee@example.com>'])
+
+
+	 * This will attempt to check the email address of the recipient from the first MX bound
+	 * to their email address. If valid then the email address is silently added.
+	 *
+	 * Forward checking if recipient email will accept email from you and not far from delivery confirmation
+	 *
+	 */
+	smtpValidation=false
+
+
 }
 

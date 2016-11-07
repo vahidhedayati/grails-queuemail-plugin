@@ -74,18 +74,22 @@ $(function() {
 		}
 	});
 	var adminMessages = {"${ConfigTypes.POOL}":"${g.message(code:'queuemail.adminButton.PO')}",
-            "${PRESERVE}":"${g.message(code:'queuemail.adminButton.PR')}",
-            "${CHECKQUEUE}":"${g.message(code:'queuemail.adminButton.CQ')}",
-            "${STOPEXECUTOR}":"${g.message(code:'queuemail.adminButton.ST')}",
-            
-            "${DEFAULTCOMPARATOR}":"${g.message(code:'queuemail.adminButton.DC')}"
+            "${ConfigTypes.PRESERVE}":"${g.message(code:'queuemail.adminButton.PR')}",
+            "${ConfigTypes.CHECKQUEUE}":"${g.message(code:'queuemail.adminButton.CQ')}",
+            "${ConfigTypes.STOPEXECUTOR}":"${g.message(code:'queuemail.adminButton.ST')}",
+			"${ConfigTypes.SERVICECONFIGS}":"${g.message(code:'queuemail.adminButton.SC')}",
+            "${ConfigTypes.DEFAULTCOMPARATOR}":"${g.message(code:'queuemail.adminButton.DC')}"
             
 	}
 	$('#adminButtons').on('change', function() {
 		var value = $('#adminButtons').val();
 		if (value!='') {
-			var params=$.param({changeType:value});			
-			return showDialog('${createLink(controller:'queueMail',action:'changeConfig')}?'+params,adminMessages[value]);
+			var params=$.param({changeType:value});
+			var url='${createLink(controller:'queueMail',action:'changeConfig')}?';
+			if (value=="${ConfigTypes.SERVICECONFIGS}") {
+				url='${createLink(controller:'queueMail',action:'changeServiceConfig')}?'
+			}
+			return showDialog(url+params,adminMessages[value]);
 		}
 	});
 })
