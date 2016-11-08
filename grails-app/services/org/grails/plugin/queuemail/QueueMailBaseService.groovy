@@ -81,7 +81,7 @@ abstract class QueueMailBaseService  {
 			if(!webRequest) {
 				def servletContext  = ServletContextHolder.getServletContext()
 				def applicationContext = WebApplicationContextUtils.getRequiredWebApplicationContext(servletContext)
-				webRequest =  grails.util.GrailsWebMockUtil.bindMockWebRequest(applicationContext)
+				webRequest = grails.util.GrailsWebUtil.bindMockWebRequest(applicationContext)
 			}
 			if (args) {
 				error = g.message(code: code,args:args)
